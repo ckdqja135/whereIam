@@ -104,9 +104,11 @@ export default function MapPane({
     const answerPos = new kakao.maps.LatLng(answerLat, answerLng);
     const guessPos = new kakao.maps.LatLng(guessLat, guessLng);
 
+    const markerSvg = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="40" viewBox="0 0 28 40"><path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 26 14 26s14-15.5 14-26C28 6.27 21.73 0 14 0z" fill="%23E74C3C" stroke="%23C0392B" stroke-width="1"/><circle cx="14" cy="14" r="6" fill="white"/></svg>`)}`;
     const answerMarkerImage = new kakao.maps.MarkerImage(
-      "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerRed.png",
-      new kakao.maps.Size(28, 40)
+      markerSvg,
+      new kakao.maps.Size(28, 40),
+      { offset: new kakao.maps.Point(14, 40) }
     );
     const answerMarker = new kakao.maps.Marker({
       position: answerPos,
