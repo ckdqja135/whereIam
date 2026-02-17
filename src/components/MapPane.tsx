@@ -39,7 +39,8 @@ export default function MapPane({
     });
     mapRef.current = map;
 
-    kakao.maps.event.addListener(map, "click", (mouseEvent: { latLng: kakao.maps.LatLng }) => {
+    kakao.maps.event.addListener(map, "click", (...args: unknown[]) => {
+      const mouseEvent = args[0] as { latLng: kakao.maps.LatLng };
       const lat = mouseEvent.latLng.getLat();
       const lng = mouseEvent.latLng.getLng();
       onClickPosition(lat, lng);
