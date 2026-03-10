@@ -35,6 +35,9 @@ const RoadviewPane = forwardRef<RoadviewHandle, RoadviewPaneProps>(
 
       const position = new kakao.maps.LatLng(lat, lng);
 
+      // 매 라운드마다 originRef를 즉시 업데이트
+      originRef.current = { panoId, lat, lng };
+
       if (!roadviewRef.current) {
         roadviewRef.current = new kakao.maps.Roadview(containerRef.current);
       }
@@ -44,6 +47,7 @@ const RoadviewPane = forwardRef<RoadviewHandle, RoadviewPaneProps>(
         const actualPos = rv.getPosition();
         const actualLat = actualPos.getLat();
         const actualLng = actualPos.getLng();
+        // 실제 위치로 originRef 보정
         originRef.current = { panoId, lat: actualLat, lng: actualLng };
         onActualPosition?.(actualLat, actualLng);
       };
