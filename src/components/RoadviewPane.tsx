@@ -40,15 +40,20 @@ const RoadviewPane = forwardRef<RoadviewHandle, RoadviewPaneProps>(
       }
 
       const rv = roadviewRef.current;
-      kakao.maps.event.addListener(rv, "init", () => {
+      const handleInit = () => {
         const actualPos = rv.getPosition();
         const actualLat = actualPos.getLat();
         const actualLng = actualPos.getLng();
         originRef.current = { panoId, lat: actualLat, lng: actualLng };
         onActualPosition?.(actualLat, actualLng);
-      });
+      };
 
+      kakao.maps.event.addListener(rv, "init", handleInit);
       rv.setPanoId(panoId, position);
+
+      return () => {
+        kakao.maps.event.removeListener(rv, "init", handleInit);
+      };
     }, [panoId, lat, lng, isLoading, onActualPosition]);
 
     return (
