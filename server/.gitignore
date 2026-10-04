@@ -1,0 +1,8 @@
+node_modules/
+dist/
+data/
+.env
+*.tsbuildinfo
+
+# 루트 .gitignore 의 .env* 규칙에서 예시 파일은 제외
+!.env.example
