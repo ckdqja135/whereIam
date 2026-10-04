@@ -12,9 +12,23 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://where-iam.vercel.app";
+const TITLE = "Where I Am - 지도에서 위치 찾기";
+const DESCRIPTION = "카카오맵 로드뷰를 보고 위치를 맞추는 GeoGuessr 스타일 게임";
+
 export const metadata: Metadata = {
-  title: "Where I Am - 지도에서 위치 찾기",
-  description: "카카오맵 로드뷰를 보고 위치를 맞추는 GeoGuessr 스타일 게임",
+  // 공유 미리보기(og:image 등)의 절대 URL 기준. 각 세그먼트의 opengraph-image.tsx 가 자동으로 붙는다.
+  metadataBase: new URL(SITE_URL),
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    siteName: "Where I Am",
+    locale: "ko_KR",
+    type: "website",
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({
