@@ -31,6 +31,7 @@ Rate limit: IP당 전체 60회/분, 챌린지 생성·결과 제출은 10회/분
 | `HOST` | `127.0.0.1` | 바인딩 주소. 프록시 뒤에서만 접근하도록 기본은 로컬 전용 |
 | `CORS_ORIGINS` | (없음) | 허용할 프론트 origin, 쉼표 구분. 예: `https://whereiam.vercel.app,http://localhost:3000` |
 | `DB_PATH` | `./data/whereiam.db` | SQLite 파일 경로. 디렉터리가 없으면 자동 생성 |
+| `PROXY_SECRET` | (없음) | 프론트 프록시 전용 공유 비밀키. 설정하면 `/health` 외 모든 요청에 `X-Proxy-Secret` 헤더가 일치해야 한다 (프록시 방식에서 사용) |
 
 ## 로컬 개발
 
@@ -81,9 +82,29 @@ pm2 reload whereiam-server
 
 로그 확인: `pm2 logs whereiam-server`
 
-## HTTPS 설정 (필수)
+## 프론트에서 연결하는 두 가지 방법
 
-Vercel 에 올라간 프론트 페이지는 HTTPS 입니다. 브라우저는 HTTPS 페이지에서 `http://<서버 IP>:4000` 같은
+### 방법 1. 프론트 프록시 (권장, 도메인/인증서 불필요)
+
+브라우저는 Vercel 의 `/api/backend/...` 만 호출하고, Next.js 라우트(`src/app/api/backend/[...path]/route.ts`)가
+Vercel 서버에서 이 서버로 대신 요청합니다. 서버 간 통신이라 이 서버가 `http://IP:포트` 여도 됩니다.
+
+1. 비밀키 생성: `openssl rand -hex 32`
+2. 이 서버 `.env`: `PROXY_SECRET=<비밀키>`, 포트를 외부에서 접근 가능하게(`HOST=0.0.0.0`, 방화벽/도커 포트 매핑) → `pm2 restart whereiam-server`
+3. Vercel 환경 변수:
+   - `NEXT_PUBLIC_API_URL=/api/backend`
+   - `BACKEND_URL=http://<서버 공인 IP>:<포트>`
+   - `BACKEND_PROXY_SECRET=<비밀키>`
+   → Redeploy
+4. 확인: `curl https://<Vercel 도메인>/api/backend/health` → `{"ok":true}`
+
+비밀키 덕분에 포트가 열려 있어도 프록시 외의 직접 호출은 401 로 거부됩니다. 단, Vercel ↔ 서버 구간은 평문 HTTP 입니다
+(현재 오가는 데이터는 닉네임·좌표·점수뿐). `CORS_ORIGINS` 는 이 방식에서는 쓰이지 않습니다.
+나중에 실시간 대전(WebSocket)을 붙일 때는 프록시를 거칠 수 없으므로 그때는 방법 2 가 필요합니다.
+
+### 방법 2. HTTPS 로 직접 노출
+
+브라우저가 이 서버를 직접 호출하는 구성입니다. Vercel 에 올라간 프론트 페이지는 HTTPS 입니다. 브라우저는 HTTPS 페이지에서 `http://<서버 IP>:4000` 같은
 HTTP 주소를 호출하면 **mixed content** 로 차단합니다. 따라서 API 서버도 반드시 HTTPS 도메인으로 노출해야 합니다.
 
 가장 간단한 방법은 [Caddy](https://caddyserver.com/) 를 리버스 프록시로 두는 것입니다. Caddy 는 Let's Encrypt 인증서를 자동으로 발급/갱신합니다.

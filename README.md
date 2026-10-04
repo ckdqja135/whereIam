@@ -1,5 +1,10 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## 환경 변수
+
+`.env.example` 을 `.env.local` 로 복사해서 채웁니다. 카카오맵 키와, 챌린지 기능용 백엔드(`server/`) 연결 설정이 들어 있습니다.
+백엔드 배포/연결 방법은 [`server/README.md`](server/README.md) 를 참고하세요.
+
 ## Getting Started
 
 First, run the development server:

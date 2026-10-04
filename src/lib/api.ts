@@ -8,7 +8,8 @@ import type {
 } from "./api-types";
 
 // 백엔드(server/, 자체 서버) 주소. Vercel 환경변수 NEXT_PUBLIC_API_URL 로 설정한다.
-// Vercel 페이지가 HTTPS이므로 반드시 https:// 주소여야 한다 (http://IP 는 브라우저가 차단).
+// - "/api/backend" (권장): 같은 도메인의 프록시 라우트를 거쳐 Vercel 서버가 BACKEND_URL 로 대신 호출한다.
+// - "https://..." : 브라우저가 직접 호출. Vercel 페이지가 HTTPS이므로 http://IP 는 mixed content 로 차단된다.
 const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "");
 
 export class ApiError extends Error {
