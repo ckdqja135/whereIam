@@ -46,7 +46,7 @@ export default function AvatarCustomizer({ avatar, onChange, dark }: AvatarCusto
 
       <div className="mt-1 flex gap-2">
         <button type="button" onClick={() => onChange(randomAvatar())} className={`rounded-full px-4 py-1 text-sm font-semibold ${pill}`}>
-          🎲 섞기
+          🎲 캐릭터 변경
         </button>
         <button
           type="button"
