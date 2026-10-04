@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 백엔드(Nest)는 server/ 안에서 별도로 lint
+    "server/**",
   ]),
 ]);
 

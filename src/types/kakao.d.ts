@@ -82,6 +82,7 @@ declare namespace kakao.maps {
   class CustomOverlay {
     constructor(options: CustomOverlayOptions);
     setMap(map: Map | null): void;
+    setPosition(position: LatLng): void;
   }
 
   interface CustomOverlayOptions {
@@ -95,8 +96,19 @@ declare namespace kakao.maps {
   class Roadview {
     constructor(container: HTMLElement, options?: RoadviewOptions);
     setPanoId(panoId: number, position: LatLng): void;
-    setViewpoint(viewpoint: RoadviewViewpoint): void;
+    getPanoId(): number;
+    setViewpoint(viewpoint: Viewpoint): void;
+    getViewpoint(): Viewpoint;
     getPosition(): LatLng;
+    relayout(): void;
+  }
+
+  class Viewpoint {
+    constructor(pan: number, tilt: number, zoom: number, panoId?: number);
+    pan: number;
+    tilt: number;
+    zoom: number;
+    panoId?: number;
   }
 
   interface RoadviewOptions {
@@ -106,13 +118,6 @@ declare namespace kakao.maps {
     pan?: number;
     tilt?: number;
     zoom?: number;
-  }
-
-  class RoadviewViewpoint {
-    constructor();
-    pan: number;
-    tilt: number;
-    zoom: number;
   }
 
   class RoadviewClient {

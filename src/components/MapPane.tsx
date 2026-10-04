@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { avatarPinHtml, createAnswerMarker } from "@/lib/map-markers";
 
 interface MapPaneProps {
   answerLat: number;
@@ -9,6 +10,7 @@ interface MapPaneProps {
   guessLng: number | null;
   distanceFormatted: string | null;
   isSubmitted: boolean;
+  pinSrc: string;
   onClickPosition: (lat: number, lng: number) => void;
 }
 
@@ -19,14 +21,38 @@ export default function MapPane({
   guessLng,
   distanceFormatted,
   isSubmitted,
+  pinSrc,
   onClickPosition,
 }: MapPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<kakao.maps.Map | null>(null);
-  const previewMarkerRef = useRef<kakao.maps.Marker | null>(null);
-  const resultMarkersRef = useRef<kakao.maps.Marker[]>([]);
+  const previewOverlayRef = useRef<kakao.maps.CustomOverlay | null>(null);
+  const answerMarkerRef = useRef<kakao.maps.Marker | null>(null);
+  const guessOverlayRef = useRef<kakao.maps.CustomOverlay | null>(null);
   const polylineRef = useRef<kakao.maps.Polyline | null>(null);
   const overlayRef = useRef<kakao.maps.CustomOverlay | null>(null);
+
+  // 클릭 리스너는 한 번만 등록되므로 최신 콜백을 ref로 참조 (제출 후 클릭 무시 등)
+  const onClickRef = useRef(onClickPosition);
+  useEffect(() => {
+    onClickRef.current = onClickPosition;
+  });
+
+  const clearResult = () => {
+    answerMarkerRef.current?.setMap(null);
+    answerMarkerRef.current = null;
+    guessOverlayRef.current?.setMap(null);
+    guessOverlayRef.current = null;
+    polylineRef.current?.setMap(null);
+    polylineRef.current = null;
+    overlayRef.current?.setMap(null);
+    overlayRef.current = null;
+  };
+
+  const clearPreview = () => {
+    previewOverlayRef.current?.setMap(null);
+    previewOverlayRef.current = null;
+  };
 
   // 지도 초기화 + 클릭 이벤트
   useEffect(() => {
@@ -41,85 +67,69 @@ export default function MapPane({
 
     kakao.maps.event.addListener(map, "click", (...args: unknown[]) => {
       const mouseEvent = args[0] as { latLng: kakao.maps.LatLng };
-      const lat = mouseEvent.latLng.getLat();
-      const lng = mouseEvent.latLng.getLng();
-      onClickPosition(lat, lng);
+      onClickRef.current(mouseEvent.latLng.getLat(), mouseEvent.latLng.getLng());
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 새 라운드 시작 시 정리 + 지도 초기화
   useEffect(() => {
     if (!mapRef.current || isSubmitted) return;
 
-    resultMarkersRef.current.forEach((m) => m.setMap(null));
-    resultMarkersRef.current = [];
-    polylineRef.current?.setMap(null);
-    polylineRef.current = null;
-    overlayRef.current?.setMap(null);
-    overlayRef.current = null;
-    previewMarkerRef.current?.setMap(null);
-    previewMarkerRef.current = null;
+    clearResult();
+    clearPreview();
 
     mapRef.current.setCenter(new kakao.maps.LatLng(36.5, 127.5));
     mapRef.current.setLevel(13);
   }, [isSubmitted, answerLat, answerLng]);
 
-  // 미리보기 마커
+  // 미리보기 마커 (내 캐릭터 얼굴 핀)
   useEffect(() => {
     if (!mapRef.current || isSubmitted) return;
 
     if (guessLat === null || guessLng === null) {
-      previewMarkerRef.current?.setMap(null);
-      previewMarkerRef.current = null;
+      clearPreview();
       return;
     }
 
     const pos = new kakao.maps.LatLng(guessLat, guessLng);
 
-    if (previewMarkerRef.current) {
-      previewMarkerRef.current.setPosition(pos);
+    if (previewOverlayRef.current) {
+      previewOverlayRef.current.setPosition(pos);
     } else {
-      previewMarkerRef.current = new kakao.maps.Marker({
+      previewOverlayRef.current = new kakao.maps.CustomOverlay({
         position: pos,
+        content: avatarPinHtml(pinSrc),
+        yAnchor: 1,
         map: mapRef.current,
       });
     }
-  }, [guessLat, guessLng, isSubmitted]);
+  }, [guessLat, guessLng, isSubmitted, pinSrc]);
 
   // 제출 결과 표시
   useEffect(() => {
     if (!mapRef.current || !isSubmitted) return;
-    if (guessLat === null || guessLng === null) return;
 
     const map = mapRef.current;
-
-    previewMarkerRef.current?.setMap(null);
-    previewMarkerRef.current = null;
-    resultMarkersRef.current.forEach((m) => m.setMap(null));
-    resultMarkersRef.current = [];
-    polylineRef.current?.setMap(null);
-    overlayRef.current?.setMap(null);
+    clearPreview();
+    clearResult();
 
     const answerPos = new kakao.maps.LatLng(answerLat, answerLng);
-    const guessPos = new kakao.maps.LatLng(guessLat, guessLng);
+    answerMarkerRef.current = createAnswerMarker(map, answerPos);
 
-    const markerSvg = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="40" viewBox="0 0 28 40"><path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 26 14 26s14-15.5 14-26C28 6.27 21.73 0 14 0z" fill="%23E74C3C" stroke="%23C0392B" stroke-width="1"/><circle cx="14" cy="14" r="6" fill="white"/></svg>`)}`;
-    const answerMarkerImage = new kakao.maps.MarkerImage(
-      markerSvg,
-      new kakao.maps.Size(28, 40),
-      { offset: new kakao.maps.Point(14, 40) }
-    );
-    const answerMarker = new kakao.maps.Marker({
-      position: answerPos,
-      map,
-      image: answerMarkerImage,
-    });
-    const guessMarker = new kakao.maps.Marker({
+    // 시간 초과로 추측 없이 제출된 경우: 정답만 보여준다
+    if (guessLat === null || guessLng === null) {
+      map.setCenter(answerPos);
+      map.setLevel(9);
+      return;
+    }
+
+    const guessPos = new kakao.maps.LatLng(guessLat, guessLng);
+    guessOverlayRef.current = new kakao.maps.CustomOverlay({
       position: guessPos,
+      content: avatarPinHtml(pinSrc),
+      yAnchor: 1,
       map,
     });
-    resultMarkersRef.current = [answerMarker, guessMarker];
 
     polylineRef.current = new kakao.maps.Polyline({
       path: [answerPos, guessPos],
@@ -145,7 +155,7 @@ export default function MapPane({
     bounds.extend(answerPos);
     bounds.extend(guessPos);
     map.setBounds(bounds, 80, 80, 80, 80);
-  }, [isSubmitted, answerLat, answerLng, guessLat, guessLng, distanceFormatted]);
+  }, [isSubmitted, answerLat, answerLng, guessLat, guessLng, distanceFormatted, pinSrc]);
 
   // 지도가 보일 때 relayout
   useEffect(() => {
