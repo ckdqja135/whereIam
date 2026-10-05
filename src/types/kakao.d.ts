@@ -67,6 +67,24 @@ declare namespace kakao.maps {
     map?: Map;
   }
 
+  class Circle {
+    constructor(options: CircleOptions);
+    setMap(map: Map | null): void;
+    getBounds(): LatLngBounds;
+  }
+
+  interface CircleOptions {
+    center: LatLng;
+    radius: number;
+    strokeWeight?: number;
+    strokeColor?: string;
+    strokeOpacity?: number;
+    strokeStyle?: string;
+    fillColor?: string;
+    fillOpacity?: number;
+    map?: Map;
+  }
+
   class InfoWindow {
     constructor(options: InfoWindowOptions);
     open(map: Map, marker?: Marker): void;
@@ -140,6 +158,23 @@ declare namespace kakao.maps {
     interface Coord2AddressResult {
       address: { address_name: string } | null;
       road_address: { address_name: string; building_name?: string } | null;
+    }
+    enum SortBy {
+      ACCURACY = "accuracy",
+      DISTANCE = "distance",
+    }
+    interface PlacesSearchResultItem {
+      place_name: string;
+      distance: string;
+      category_group_code: string;
+    }
+    class Places {
+      constructor();
+      categorySearch(
+        code: string,
+        callback: (data: PlacesSearchResultItem[], status: Status) => void,
+        options?: { location?: LatLng; radius?: number; sort?: SortBy }
+      ): void;
     }
     class Geocoder {
       constructor();

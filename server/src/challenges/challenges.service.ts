@@ -5,6 +5,7 @@ import type {
   ChallengeResponse,
   GameSettings,
   Guess,
+  ItemId,
   LeaderboardResponse,
   PlayerInfo,
   SubmitResultResponse,
@@ -44,6 +45,7 @@ export class ChallengesService {
   create(dto: CreateChallengeDto): { id: string } {
     const locations: ChallengeLocation[] = dto.locations.map(({ lat, lng, panoId }) => ({ lat, lng, panoId }));
     if (dto.creatorGuesses) this.assertGuessCount(dto.creatorGuesses, locations.length);
+    if (dto.creatorItems) this.assertItemCount(dto.creatorItems, locations.length);
 
     const id = generateId();
     const createdAt = new Date().toISOString();
@@ -70,7 +72,7 @@ export class ChallengesService {
           createdAt,
         );
       if (dto.creatorGuesses) {
-        this.insertResult(id, locations, toPlayerInfo(dto.creator), dto.creatorGuesses, createdAt);
+        this.insertResult(id, locations, toPlayerInfo(dto.creator), dto.creatorGuesses, dto.creatorItems, createdAt);
       }
     })();
 
@@ -92,9 +94,17 @@ export class ChallengesService {
     const challenge = this.getChallengeRow(challengeId);
     const locations: ChallengeLocation[] = JSON.parse(challenge.locations);
     this.assertGuessCount(dto.guesses, locations.length);
+    if (dto.items) this.assertItemCount(dto.items, locations.length);
 
     return this.db.transaction(() =>
-      this.insertResult(challengeId, locations, toPlayerInfo(dto.player), dto.guesses, new Date().toISOString()),
+      this.insertResult(
+        challengeId,
+        locations,
+        toPlayerInfo(dto.player),
+        dto.guesses,
+        dto.items,
+        new Date().toISOString(),
+      ),
     )();
   }
 
@@ -125,9 +135,10 @@ export class ChallengesService {
     locations: ChallengeLocation[],
     player: PlayerInfo,
     guesses: Guess[],
+    items: ItemId[][] | undefined,
     createdAt: string,
   ): SubmitResultResponse {
-    const { rounds, totalScore } = scoreGuesses(locations, guesses);
+    const { rounds, totalScore } = scoreGuesses(locations, guesses, items);
     const resultId = generateId();
     const cleanGuesses: Guess[] = guesses.map((g) => (g ? { lat: g.lat, lng: g.lng } : null));
 
@@ -160,6 +171,12 @@ export class ChallengesService {
     const row = this.db.prepare(`SELECT * FROM challenges WHERE id = ?`).get(id) as ChallengeRow | undefined;
     if (!row) throw new NotFoundException('챌린지를 찾을 수 없습니다');
     return row;
+  }
+
+  private assertItemCount(items: ItemId[][], expected: number) {
+    if (items.length !== expected) {
+      throw new BadRequestException(`items 길이는 라운드 수(${expected})와 같아야 합니다`);
+    }
   }
 
   private assertGuessCount(guesses: Guess[], expected: number) {

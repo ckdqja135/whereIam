@@ -14,9 +14,10 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import type { Guess } from '../challenge.types';
+import type { Guess, ItemId } from '../challenge.types';
 import { ROUNDS_PER_GAME } from '../score';
 import { IsGuessArray } from './guess.validator';
+import { IsItemsArray } from './items.validator';
 import { PlayerInfoDto } from './player.dto';
 
 export const TIME_LIMITS = [0, 60, 120, 300, 600];
@@ -76,4 +77,8 @@ export class CreateChallengeDto {
   @IsOptional()
   @IsGuessArray()
   creatorGuesses?: Guess[];
+
+  @IsOptional()
+  @IsItemsArray()
+  creatorItems?: ItemId[][];
 }

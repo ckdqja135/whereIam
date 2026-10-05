@@ -95,6 +95,7 @@ function ChallengeGame({ id }: { id: string }) {
         const res = await submitChallengeResult(id, {
           player: { nickname: player.nickname, avatar: player.avatar },
           guesses: finalResults.map((r) => r.guess),
+          items: finalResults.map((r) => r.items),
         });
         setMyResultId(res.resultId);
         setMyRank(res.rank);

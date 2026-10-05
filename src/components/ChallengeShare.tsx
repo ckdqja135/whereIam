@@ -29,6 +29,7 @@ export default function ChallengeShare({ profile, settings, results }: Challenge
         settings,
         locations: results.map((r) => r.answer),
         creatorGuesses: results.map((r) => r.guess),
+        creatorItems: results.map((r) => r.items),
       });
       setLink(`${window.location.origin}/challenge/${id}`);
       setStatus("done");

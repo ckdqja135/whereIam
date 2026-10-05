@@ -8,6 +8,7 @@ import { getAvatarPin } from "@/lib/avatar-pin";
 import { avatarPinHtml, createAnswerMarker } from "@/lib/map-markers";
 import AvatarPin from "./avatar/AvatarPin";
 import { formatAddress } from "@/lib/address";
+import { itemDef } from "@/lib/items";
 
 interface ResultScreenProps {
   profile: Profile;
@@ -88,6 +89,11 @@ export default function ResultScreen({ profile, results, title = "게임 결과"
                 <span className="text-gray-500">{r.distance ? r.distance.formatted : "시간 초과"}</span>
                 <span className="w-20 text-right font-bold tabular-nums text-gray-900">{r.score.toLocaleString()}점</span>
               </div>
+              {r.penalty > 0 && (
+                <p className="mt-1 text-xs text-red-500">
+                  아이템 {r.items.map((id) => itemDef(id).emoji).join(" ")} -{r.penalty.toLocaleString()}점
+                </p>
+              )}
               {formatAddress(r.address) && (
                 <p className="mt-1 truncate text-xs text-gray-500">📍 {formatAddress(r.address)}</p>
               )}

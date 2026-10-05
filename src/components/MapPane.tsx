@@ -11,6 +11,8 @@ interface MapPaneProps {
   distanceFormatted: string | null;
   isSubmitted: boolean;
   pinSrc: string;
+  // 범위 힌트 아이템: 정답이 들어 있는 원
+  hintCircle?: { lat: number; lng: number; radius: number } | null;
   onClickPosition: (lat: number, lng: number) => void;
 }
 
@@ -22,6 +24,7 @@ export default function MapPane({
   distanceFormatted,
   isSubmitted,
   pinSrc,
+  hintCircle,
   onClickPosition,
 }: MapPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -31,6 +34,7 @@ export default function MapPane({
   const guessOverlayRef = useRef<kakao.maps.CustomOverlay | null>(null);
   const polylineRef = useRef<kakao.maps.Polyline | null>(null);
   const overlayRef = useRef<kakao.maps.CustomOverlay | null>(null);
+  const hintCircleRef = useRef<kakao.maps.Circle | null>(null);
 
   // 클릭 리스너는 한 번만 등록되므로 최신 콜백을 ref로 참조 (제출 후 클릭 무시 등)
   const onClickRef = useRef(onClickPosition);
@@ -156,6 +160,29 @@ export default function MapPane({
     bounds.extend(guessPos);
     map.setBounds(bounds, 80, 80, 80, 80);
   }, [isSubmitted, answerLat, answerLng, guessLat, guessLng, distanceFormatted, pinSrc]);
+
+  // 범위 힌트 원 (라운드가 바뀌어 hintCircle 이 없어지면 지운다)
+  useEffect(() => {
+    const map = mapRef.current;
+    hintCircleRef.current?.setMap(null);
+    hintCircleRef.current = null;
+    if (!map || !hintCircle) return;
+    const circle = new kakao.maps.Circle({
+      center: new kakao.maps.LatLng(hintCircle.lat, hintCircle.lng),
+      radius: hintCircle.radius,
+      strokeWeight: 3,
+      strokeColor: "#7c3aed",
+      strokeOpacity: 0.9,
+      strokeStyle: "dashed",
+      fillColor: "#a78bfa",
+      fillOpacity: 0.18,
+      map,
+    });
+    hintCircleRef.current = circle;
+    // 제출 전이면 원이 잘 보이도록 지도를 맞춘다
+    if (!isSubmitted) map.setBounds(circle.getBounds(), 40, 40, 40, 40);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hintCircle]);
 
   // 지도가 보일 때 relayout
   useEffect(() => {

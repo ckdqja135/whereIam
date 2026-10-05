@@ -1,5 +1,6 @@
 // 점수 계산. 프론트의 src/lib/score.ts, src/lib/haversine.ts 와 반드시 동일한 공식을 유지할 것.
-import type { ChallengeLocation, Guess, RoundScore } from './challenge.types';
+import type { ChallengeLocation, Guess, ItemId, RoundScore } from './challenge.types';
+import { roundPenalty } from './items';
 
 export const MAX_SCORE = 5000;
 export const ROUNDS_PER_GAME = 5;
@@ -28,16 +29,19 @@ export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: numb
 }
 
 // 라운드별 점수 계산. 추측하지 않은 라운드(null)는 0점.
+// 아이템을 쓴 라운드는 감점하되 0점 아래로는 내려가지 않는다.
 export function scoreGuesses(
   locations: ChallengeLocation[],
   guesses: Guess[],
+  items?: ItemId[][],
 ): { rounds: RoundScore[]; totalScore: number } {
   const rounds = locations.map((loc, i): RoundScore => {
     const guess = guesses[i];
-    if (!guess) return { distanceKm: null, score: 0 };
+    const penalty = roundPenalty(items?.[i]);
+    if (!guess) return { distanceKm: null, score: 0, penalty };
     // 프론트와 같은 순서(정답 → 추측)로 계산
     const distanceKm = haversineKm(loc.lat, loc.lng, guess.lat, guess.lng);
-    return { distanceKm, score: calculateScore(distanceKm) };
+    return { distanceKm, score: Math.max(0, calculateScore(distanceKm) - penalty), penalty };
   });
   const totalScore = rounds.reduce((sum, r) => sum + r.score, 0);
   return { rounds, totalScore };

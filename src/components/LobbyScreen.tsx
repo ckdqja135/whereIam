@@ -107,10 +107,14 @@ export default function LobbyScreen({
           ))}
         </div>
 
+        <p className="mt-6 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800">
+          💡 게임 중 힌트 아이템(지역·범위·주변 장소)을 <b>최대 3번</b> 쓸 수 있어요. 대신 그 라운드 점수가 깎여요.
+        </p>
+
         <button
           type="submit"
           disabled={!sdkReady}
-          className="mt-8 w-full rounded-lg bg-blue-600 py-3 font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+          className="mt-4 w-full rounded-lg bg-blue-600 py-3 font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
         >
           {sdkReady ? `게임 시작 (${ROUNDS_PER_GAME}라운드)` : sdkError ? "카카오맵을 불러오지 못했어요" : "카카오맵 불러오는 중..."}
         </button>

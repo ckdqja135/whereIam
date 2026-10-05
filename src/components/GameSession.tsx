@@ -10,6 +10,8 @@ import type { Profile } from "@/lib/profile";
 import type { GameSettings } from "@/lib/game-settings";
 import type { ChallengeLocation } from "@/lib/api-types";
 import type { RoundResult } from "@/lib/game";
+import { ITEMS, ItemId, itemDef, MAX_ITEMS_PER_GAME, roundPenalty } from "@/lib/items";
+import { getNearbyHint, getRegionHint, makeRadiusHint } from "@/lib/hints";
 import RoadviewPane, { RoadviewHandle } from "./RoadviewPane";
 import MapPane from "./MapPane";
 import AvatarPin from "./avatar/AvatarPin";
@@ -47,6 +49,13 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
   const [roundAddress, setRoundAddress] = useState<AddressResult | null | undefined>(undefined);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(settings.timeLimit);
+  // 아이템: 이번 라운드에 쓴 것 / 받은 힌트
+  const [roundItems, setRoundItems] = useState<ItemId[]>([]);
+  const [itemBusy, setItemBusy] = useState<ItemId | null>(null);
+  const [itemMessage, setItemMessage] = useState<string | null>(null);
+  const [regionHint, setRegionHint] = useState<string | null>(null);
+  const [nearbyHint, setNearbyHint] = useState<string | null>(null);
+  const [circleHint, setCircleHint] = useState<{ lat: number; lng: number; radius: number } | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const roadviewRef = useRef<RoadviewHandle>(null);
@@ -58,6 +67,9 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
 
   const pinSrc = useMemo(() => getAvatarPin(profile.avatar), [profile.avatar]);
   const totalScore = results.reduce((sum, r) => sum + r.score, 0);
+  // 게임 전체에서 쓴 아이템 수 (지난 라운드 + 이번 라운드)
+  const itemsUsed = results.reduce((sum, r) => sum + r.items.length, 0) + (phase === "submitted" ? 0 : roundItems.length);
+  const itemsLeft = MAX_ITEMS_PER_GAME - itemsUsed;
 
   const startRound = useCallback(
     async (roundNumber: number) => {
@@ -67,6 +79,12 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
       setDistance(null);
       setRoundScore(0);
       setRoundAddress(undefined);
+      setRoundItems([]);
+      setItemBusy(null);
+      setItemMessage(null);
+      setRegionHint(null);
+      setNearbyHint(null);
+      setCircleHint(null);
       setErrorMsg(null);
       setRemainingSeconds(settings.timeLimit);
 
@@ -118,11 +136,13 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
     const dist = guessCoord
       ? calculateDistance(answer.lat, answer.lng, guessCoord.lat, guessCoord.lng)
       : null;
-    const score = dist ? calculateScore(dist.km) : 0;
+    // 아이템을 쓴 만큼 감점 (0점 아래로는 내려가지 않음, 서버와 같은 규칙)
+    const penalty = roundPenalty(roundItems);
+    const score = dist ? Math.max(0, calculateScore(dist.km) - penalty) : 0;
 
     setDistance(dist);
     setRoundScore(score);
-    setResults((prev) => [...prev, { answer, guess: guessCoord, distance: dist, score }]);
+    setResults((prev) => [...prev, { answer, guess: guessCoord, distance: dist, score, items: roundItems, penalty }]);
     setPhase("submitted");
     setView("map");
 
@@ -132,7 +152,42 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
       if (roundRef.current === roundIndex + 1) setRoundAddress(address);
       setResults((prev) => prev.map((r, i) => (i === roundIndex ? { ...r, address } : r)));
     });
-  }, [answer, guessCoord, round]);
+  }, [answer, guessCoord, round, roundItems]);
+
+  // 아이템 사용: 힌트를 받는 데 성공했을 때만 소모한다
+  const applyItem = async (id: ItemId) => {
+    if (!answer || phase !== "playing" || itemBusy || itemsLeft <= 0 || roundItems.includes(id)) return;
+    setItemBusy(id);
+    setItemMessage(null);
+    const usingRound = round;
+    let ok = false;
+    try {
+      if (id === "region") {
+        const region = await getRegionHint(answer.lat, answer.lng);
+        if (region) {
+          setRegionHint(region);
+          ok = true;
+        }
+      } else if (id === "radius") {
+        setCircleHint(makeRadiusHint(answer.lat, answer.lng));
+        setView("map");
+        ok = true;
+      } else {
+        const nearby = await getNearbyHint(answer.lat, answer.lng);
+        if (nearby) {
+          setNearbyHint(nearby);
+          ok = true;
+        }
+      }
+    } finally {
+      // 응답을 기다리는 사이 라운드가 넘어갔으면 반영하지 않는다
+      if (roundRef.current === usingRound) {
+        if (ok) setRoundItems((prev) => [...prev, id]);
+        else setItemMessage(`${itemDef(id).name}를 찾지 못했어요. 아이템은 소모되지 않았어요.`);
+        setItemBusy(null);
+      }
+    }
+  };
 
   // 로드뷰가 실제로 열린 파노라마 좌표로 정답을 보정한다.
   // 챌린지 위치는 이미 보정된 좌표로 저장되므로 서버 채점과 일치한다.
@@ -204,6 +259,7 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
             distanceFormatted={distance?.formatted ?? null}
             isSubmitted={phase === "submitted"}
             pinSrc={pinSrc}
+            hintCircle={circleHint}
             onClickPosition={handleMapClick}
           />
         )}
@@ -213,9 +269,52 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
 
       {/* 상단: 플레이어 + 라운드/점수 + 타이머 */}
       <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex items-start justify-between gap-2 p-4">
-        <div className="pointer-events-auto flex items-center gap-2 rounded-lg bg-black/70 py-1.5 pl-1.5 pr-4 text-sm font-bold text-white">
-          <AvatarPin avatar={profile.avatar} size={32} />
-          <span className="max-w-[8rem] truncate">{profile.nickname}</span>
+        <div className="flex max-w-[16rem] flex-col items-start gap-2">
+          <div className="pointer-events-auto flex items-center gap-2 rounded-lg bg-black/70 py-1.5 pl-1.5 pr-4 text-sm font-bold text-white">
+            <AvatarPin avatar={profile.avatar} size={32} />
+            <span className="max-w-[8rem] truncate">{profile.nickname}</span>
+          </div>
+
+          {/* 아이템 (게임 전체 3회, 사용하면 이번 라운드 점수에서 감점) */}
+          {phase === "playing" && (
+            <div className="pointer-events-auto w-full rounded-lg bg-black/70 p-2 text-white">
+              <p className="px-1 text-[11px] font-semibold text-white/70">
+                아이템 · 남은 횟수 <span className="text-yellow-300">{itemsLeft}</span>/{MAX_ITEMS_PER_GAME}
+              </p>
+              <div className="mt-1.5 flex flex-col gap-1">
+                {ITEMS.map((item) => {
+                  const used = roundItems.includes(item.id);
+                  const disabled = used || itemsLeft <= 0 || itemBusy !== null;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => applyItem(item.id)}
+                      disabled={disabled}
+                      title={item.description}
+                      className="flex items-center justify-between gap-2 rounded-md bg-white/10 px-2.5 py-1.5 text-left text-xs font-semibold transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <span>
+                        {item.emoji} {item.name}
+                        {used && " ✓"}
+                        {itemBusy === item.id && " …"}
+                      </span>
+                      <span className="tabular-nums text-red-300">-{item.penalty.toLocaleString()}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {itemMessage && <p className="mt-1.5 px-1 text-[11px] text-red-300">{itemMessage}</p>}
+            </div>
+          )}
+
+          {/* 받은 힌트 */}
+          {phase === "playing" && (regionHint || nearbyHint || circleHint) && (
+            <div className="pointer-events-auto w-full space-y-1 rounded-lg bg-violet-700/90 p-2.5 text-xs text-white shadow-lg">
+              {regionHint && <p>🗺️ 정답은 <b>{regionHint}</b>에 있어요</p>}
+              {circleHint && <p>🎯 지도에 표시된 <b>보라색 원 안</b>에 있어요</p>}
+              {nearbyHint && <p>🏫 근처에 <b>{nearbyHint}</b></p>}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -246,6 +345,11 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
             <p className="mt-1 text-sm text-gray-500">
               {distance ? `정답과의 거리 ${distance.formatted}` : "시간 초과 - 위치를 선택하지 않았어요"}
             </p>
+            {roundItems.length > 0 && (
+              <p className="mt-1 text-xs font-semibold text-red-500">
+                아이템 {roundItems.map((id) => itemDef(id).emoji).join(" ")} 사용 -{roundPenalty(roundItems).toLocaleString()}점
+              </p>
+            )}
             <p className="mt-2 max-w-xs text-sm font-medium text-gray-800">
               📍 {roundAddress === undefined ? "주소 확인 중..." : formatAddress(roundAddress) ?? "주소 정보 없음"}
             </p>
