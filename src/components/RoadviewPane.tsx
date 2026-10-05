@@ -71,8 +71,10 @@ const RoadviewPane = forwardRef<RoadviewHandle, RoadviewPaneProps>(
       // init 이벤트는 로드뷰를 처음 만들 때만 발생하므로, 2라운드부터는 panoid/position 변경으로 감지한다.
       const syncOrigin = () => {
         if (synced || rv.getPanoId() !== panoId) return;
-        synced = true;
         const actualPos = rv.getPosition();
+        // 파노라마 정보가 아직 안 들어왔으면 다음 position_changed 때 다시 시도
+        if (!actualPos) return;
+        synced = true;
         const actualLat = actualPos.getLat();
         const actualLng = actualPos.getLng();
         originRef.current = { panoId, lat: actualLat, lng: actualLng };
