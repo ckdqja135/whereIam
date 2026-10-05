@@ -41,36 +41,51 @@ const RoadviewPane = forwardRef<RoadviewHandle, RoadviewPaneProps>(
       },
     }));
 
+    // lat/lng 는 첫 보정 후 부모가 다시 내려주므로, 그때마다 로드뷰를 다시 열지 않도록 ref 로 읽는다
+    const startPosRef = useRef({ lat, lng });
+    const onActualPositionRef = useRef(onActualPosition);
+    useEffect(() => {
+      startPosRef.current = { lat, lng };
+      onActualPositionRef.current = onActualPosition;
+    });
+
     useEffect(() => {
       if (!containerRef.current || !panoId || isLoading) return;
       if (!window.kakao?.maps) return;
 
-      const position = new kakao.maps.LatLng(lat, lng);
+      const { lat: startLat, lng: startLng } = startPosRef.current;
+      const position = new kakao.maps.LatLng(startLat, startLng);
 
       // 매 라운드마다 originRef를 즉시 업데이트
-      originRef.current = { panoId, lat, lng };
+      originRef.current = { panoId, lat: startLat, lng: startLng };
       baseViewRef.current = null;
+      let synced = false;
 
       if (!roadviewRef.current) {
         roadviewRef.current = new kakao.maps.Roadview(containerRef.current);
       }
 
       const rv = roadviewRef.current;
-      const handleInit = () => {
+
+      // 로드뷰가 이번 라운드의 파노라마에 도착하면 실제 좌표로 정답을 보정한다.
+      // init 이벤트는 로드뷰를 처음 만들 때만 발생하므로, 2라운드부터는 panoid/position 변경으로 감지한다.
+      const syncOrigin = () => {
+        if (synced || rv.getPanoId() !== panoId) return;
+        synced = true;
         const actualPos = rv.getPosition();
         const actualLat = actualPos.getLat();
         const actualLng = actualPos.getLng();
-        // 실제 위치로 originRef 보정
         originRef.current = { panoId, lat: actualLat, lng: actualLng };
         const v = rv.getViewpoint();
         baseViewRef.current = { pan: v.pan, tilt: v.tilt, zoom: v.zoom };
-        onActualPosition?.(actualLat, actualLng);
+        onActualPositionRef.current?.(actualLat, actualLng);
       };
 
       // 이동 금지: 다른 파노라마로 넘어가면 원래 위치로 되돌린다
       const handlePanoChanged = () => {
+        syncOrigin();
         const origin = originRef.current;
-        if (rulesRef.current.allowMove || !origin) return;
+        if (rulesRef.current.allowMove || !origin || !synced) return;
         if (rv.getPanoId() !== origin.panoId) {
           rv.setPanoId(origin.panoId, new kakao.maps.LatLng(origin.lat, origin.lng));
         }
@@ -90,17 +105,19 @@ const RoadviewPane = forwardRef<RoadviewHandle, RoadviewPaneProps>(
         }
       };
 
-      kakao.maps.event.addListener(rv, "init", handleInit);
+      kakao.maps.event.addListener(rv, "init", syncOrigin);
+      kakao.maps.event.addListener(rv, "position_changed", syncOrigin);
       kakao.maps.event.addListener(rv, "panoid_changed", handlePanoChanged);
       kakao.maps.event.addListener(rv, "viewpoint_changed", handleViewpointChanged);
       rv.setPanoId(panoId, position);
 
       return () => {
-        kakao.maps.event.removeListener(rv, "init", handleInit);
+        kakao.maps.event.removeListener(rv, "init", syncOrigin);
+        kakao.maps.event.removeListener(rv, "position_changed", syncOrigin);
         kakao.maps.event.removeListener(rv, "panoid_changed", handlePanoChanged);
         kakao.maps.event.removeListener(rv, "viewpoint_changed", handleViewpointChanged);
       };
-    }, [panoId, lat, lng, isLoading, onActualPosition]);
+    }, [panoId, isLoading]);
 
     // 확대 금지: 휠 입력을 로드뷰에 전달하기 전에 막아 화면이 튀지 않게 한다
     useEffect(() => {

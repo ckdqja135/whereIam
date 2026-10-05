@@ -7,6 +7,7 @@ import { MAX_SCORE } from "@/lib/score";
 import { getAvatarPin } from "@/lib/avatar-pin";
 import { avatarPinHtml, createAnswerMarker } from "@/lib/map-markers";
 import AvatarPin from "./avatar/AvatarPin";
+import { formatAddress } from "@/lib/address";
 
 interface ResultScreenProps {
   profile: Profile;
@@ -81,10 +82,15 @@ export default function ResultScreen({ profile, results, title = "게임 결과"
 
         <ul className="mt-6 divide-y divide-gray-100">
           {results.map((r, i) => (
-            <li key={i} className="flex items-center justify-between py-3 text-sm">
-              <span className="font-semibold text-gray-700">라운드 {i + 1}</span>
-              <span className="text-gray-500">{r.distance ? r.distance.formatted : "시간 초과"}</span>
-              <span className="w-20 text-right font-bold tabular-nums text-gray-900">{r.score.toLocaleString()}점</span>
+            <li key={i} className="py-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-gray-700">라운드 {i + 1}</span>
+                <span className="text-gray-500">{r.distance ? r.distance.formatted : "시간 초과"}</span>
+                <span className="w-20 text-right font-bold tabular-nums text-gray-900">{r.score.toLocaleString()}점</span>
+              </div>
+              {formatAddress(r.address) && (
+                <p className="mt-1 truncate text-xs text-gray-500">📍 {formatAddress(r.address)}</p>
+              )}
             </li>
           ))}
         </ul>

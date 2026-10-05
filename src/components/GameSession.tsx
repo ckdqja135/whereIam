@@ -5,6 +5,7 @@ import { getRandomRoadviewLocation } from "@/lib/random-location";
 import { calculateDistance, DistanceResult } from "@/lib/haversine";
 import { calculateScore, ROUNDS_PER_GAME } from "@/lib/score";
 import { getAvatarPin } from "@/lib/avatar-pin";
+import { formatAddress, getAddress, AddressResult } from "@/lib/address";
 import type { Profile } from "@/lib/profile";
 import type { GameSettings } from "@/lib/game-settings";
 import type { ChallengeLocation } from "@/lib/api-types";
@@ -43,11 +44,17 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
   const [guessCoord, setGuessCoord] = useState<{ lat: number; lng: number } | null>(null);
   const [distance, setDistance] = useState<DistanceResult | null>(null);
   const [roundScore, setRoundScore] = useState(0);
+  const [roundAddress, setRoundAddress] = useState<AddressResult | null | undefined>(undefined);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(settings.timeLimit);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const roadviewRef = useRef<RoadviewHandle>(null);
+  // 주소 응답이 늦게 와서 다음 라운드 화면에 잘못 뜨지 않도록 현재 라운드를 기억한다
+  const roundRef = useRef(round);
+  useEffect(() => {
+    roundRef.current = round;
+  }, [round]);
 
   const pinSrc = useMemo(() => getAvatarPin(profile.avatar), [profile.avatar]);
   const totalScore = results.reduce((sum, r) => sum + r.score, 0);
@@ -59,6 +66,7 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
       setGuessCoord(null);
       setDistance(null);
       setRoundScore(0);
+      setRoundAddress(undefined);
       setErrorMsg(null);
       setRemainingSeconds(settings.timeLimit);
 
@@ -117,7 +125,14 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
     setResults((prev) => [...prev, { answer, guess: guessCoord, distance: dist, score }]);
     setPhase("submitted");
     setView("map");
-  }, [answer, guessCoord]);
+
+    // 정답 위치 주소는 비동기로 받아서 이번 라운드 결과에 채운다
+    const roundIndex = round - 1;
+    getAddress(answer.lat, answer.lng).then((address) => {
+      if (roundRef.current === roundIndex + 1) setRoundAddress(address);
+      setResults((prev) => prev.map((r, i) => (i === roundIndex ? { ...r, address } : r)));
+    });
+  }, [answer, guessCoord, round]);
 
   // 로드뷰가 실제로 열린 파노라마 좌표로 정답을 보정한다.
   // 챌린지 위치는 이미 보정된 좌표로 저장되므로 서버 채점과 일치한다.
@@ -230,6 +245,9 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
             </p>
             <p className="mt-1 text-sm text-gray-500">
               {distance ? `정답과의 거리 ${distance.formatted}` : "시간 초과 - 위치를 선택하지 않았어요"}
+            </p>
+            <p className="mt-2 max-w-xs text-sm font-medium text-gray-800">
+              📍 {roundAddress === undefined ? "주소 확인 중..." : formatAddress(roundAddress) ?? "주소 정보 없음"}
             </p>
           </div>
         )}
