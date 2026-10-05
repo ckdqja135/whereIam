@@ -1,10 +1,11 @@
 import type { GameSettings } from "@/lib/game-settings";
-import { timeLimitLabel } from "@/lib/game-settings";
+import { modeLabel, timeLimitLabel } from "@/lib/game-settings";
 
 // 챌린지/결과 화면에 표시하는 게임 설정 요약
 export default function GameSettingsIcons({ settings }: { settings: GameSettings }) {
   const items = [
     { icon: "🇰🇷", label: "대한민국", on: true },
+    { icon: settings.itemMode ? "🎁" : "🚫", label: modeLabel(settings), on: true },
     { icon: "⏱️", label: timeLimitLabel(settings.timeLimit), on: true },
     { icon: "🚶", label: settings.allowMove ? "이동 허용" : "이동 금지", on: settings.allowMove },
     { icon: "↔️", label: settings.allowPan ? "회전 허용" : "회전 금지", on: settings.allowPan },

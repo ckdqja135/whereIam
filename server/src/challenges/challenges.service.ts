@@ -46,6 +46,7 @@ export class ChallengesService {
     const locations: ChallengeLocation[] = dto.locations.map(({ lat, lng, panoId }) => ({ lat, lng, panoId }));
     if (dto.creatorGuesses) this.assertGuessCount(dto.creatorGuesses, locations.length);
     if (dto.creatorItems) this.assertItemCount(dto.creatorItems, locations.length);
+    if (!dto.settings.itemMode) this.assertNoItems(dto.creatorItems);
 
     const id = generateId();
     const createdAt = new Date().toISOString();
@@ -54,6 +55,7 @@ export class ChallengesService {
       allowMove: dto.settings.allowMove,
       allowPan: dto.settings.allowPan,
       allowZoom: dto.settings.allowZoom,
+      itemMode: dto.settings.itemMode ?? false,
     };
 
     // 챌린지 + (있다면) 만든 사람 결과를 한 트랜잭션으로 저장
@@ -95,6 +97,8 @@ export class ChallengesService {
     const locations: ChallengeLocation[] = JSON.parse(challenge.locations);
     this.assertGuessCount(dto.guesses, locations.length);
     if (dto.items) this.assertItemCount(dto.items, locations.length);
+    const settings: GameSettings = JSON.parse(challenge.settings);
+    if (!settings.itemMode) this.assertNoItems(dto.items);
 
     return this.db.transaction(() =>
       this.insertResult(
@@ -171,6 +175,13 @@ export class ChallengesService {
     const row = this.db.prepare(`SELECT * FROM challenges WHERE id = ?`).get(id) as ChallengeRow | undefined;
     if (!row) throw new NotFoundException('챌린지를 찾을 수 없습니다');
     return row;
+  }
+
+  // 노템 모드 챌린지에는 아이템 사용 기록이 있으면 안 된다
+  private assertNoItems(items: ItemId[][] | undefined) {
+    if (items?.some((round) => round.length > 0)) {
+      throw new BadRequestException('노템 모드 챌린지에서는 아이템을 사용할 수 없습니다');
+    }
   }
 
   private assertItemCount(items: ItemId[][], expected: number) {

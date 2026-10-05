@@ -27,6 +27,8 @@ export interface GameSettings {
   allowMove: boolean;
   allowPan: boolean;
   allowZoom: boolean;
+  // 아이템 모드. false(노템)면 힌트 아이템을 쓸 수 없다. 모드 도입 전 챌린지는 값이 없으며 노템으로 취급한다.
+  itemMode?: boolean;
 }
 
 export interface ChallengeLocation {

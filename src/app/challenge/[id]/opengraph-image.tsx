@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { normalizeAvatar } from "@/lib/avatar";
-import { timeLimitLabel } from "@/lib/game-settings";
+import { modeLabel, timeLimitLabel } from "@/lib/game-settings";
 import { fetchChallengeFromBackend } from "@/lib/backend-server";
 import { OgCharacter, OgFrame, OgPill, OG_SIZE, ogFonts } from "@/lib/og";
 
@@ -18,7 +18,8 @@ export default async function Image({ params }: { params: Promise<{ id: string }
   const settings = challenge?.settings;
   const pills = settings
     ? [
-        timeLimitLabel(settings.timeLimit),
+        modeLabel(settings),
+    timeLimitLabel(settings.timeLimit),
         settings.allowMove ? "이동 허용" : "이동 금지",
         settings.allowPan ? "회전 허용" : "회전 금지",
         settings.allowZoom ? "확대 허용" : "확대 금지",

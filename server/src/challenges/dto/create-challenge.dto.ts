@@ -36,6 +36,11 @@ export class GameSettingsDto {
 
   @IsBoolean()
   allowZoom: boolean;
+
+  // 없으면 노템 모드
+  @IsOptional()
+  @IsBoolean()
+  itemMode?: boolean;
 }
 
 // 대한민국 범위 안의 로드뷰 위치

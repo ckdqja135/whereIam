@@ -53,6 +53,32 @@ export default function LobbyScreen({
         <h1 className="text-center text-2xl font-bold text-gray-900">Where I Am</h1>
         <p className="mt-1 text-center text-sm text-gray-500">로드뷰를 보고 대한민국 어디인지 맞혀보세요</p>
 
+        {/* 모드 */}
+        <div className="mt-5 grid grid-cols-2 gap-2" role="radiogroup" aria-label="게임 모드">
+          {[
+            { itemMode: false, emoji: "🚫", title: "노템 모드", desc: "실력만으로 승부" },
+            { itemMode: true, emoji: "🎁", title: "아이템 모드", desc: "힌트 3번 (감점 있음)" },
+          ].map((m) => {
+            const selected = settings.itemMode === m.itemMode;
+            return (
+              <button
+                key={m.title}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => setSettings((s) => ({ ...s, itemMode: m.itemMode }))}
+                className={`rounded-xl border-2 px-3 py-3 text-left transition-colors ${
+                  selected ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white hover:bg-gray-50"
+                }`}
+              >
+                <span className="text-xl">{m.emoji}</span>
+                <p className="mt-1 text-sm font-bold text-gray-900">{m.title}</p>
+                <p className="text-xs text-gray-500">{m.desc}</p>
+              </button>
+            );
+          })}
+        </div>
+
         {/* 캐릭터 */}
         <div className="mt-4">
           <AvatarCustomizer avatar={avatar} onChange={setAvatar} />
@@ -107,16 +133,18 @@ export default function LobbyScreen({
           ))}
         </div>
 
-        <p className="mt-6 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800">
-          💡 게임 중 힌트 아이템(지역·범위·주변 장소)을 <b>최대 3번</b> 쓸 수 있어요. 대신 그 라운드 점수가 깎여요.
-        </p>
+        {settings.itemMode && (
+          <p className="mt-6 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800">
+            💡 게임 중 힌트 아이템(지역·범위·주변 장소)을 <b>최대 3번</b> 쓸 수 있어요. 대신 그 라운드 점수가 깎여요.
+          </p>
+        )}
 
         <button
           type="submit"
           disabled={!sdkReady}
-          className="mt-4 w-full rounded-lg bg-blue-600 py-3 font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+          className="mt-6 w-full rounded-lg bg-blue-600 py-3 font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
         >
-          {sdkReady ? `게임 시작 (${ROUNDS_PER_GAME}라운드)` : sdkError ? "카카오맵을 불러오지 못했어요" : "카카오맵 불러오는 중..."}
+          {sdkReady ? `${settings.itemMode ? "아이템" : "노템"} 모드로 시작 (${ROUNDS_PER_GAME}라운드)` : sdkError ? "카카오맵을 불러오지 못했어요" : "카카오맵 불러오는 중..."}
         </button>
         {sdkError && <p className="mt-2 text-center text-xs text-red-600">{sdkError}</p>}
       </form>

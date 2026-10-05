@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import ChallengeController from "@/components/ChallengeController";
 import { fetchChallengeFromBackend } from "@/lib/backend-server";
-import { timeLimitLabel } from "@/lib/game-settings";
+import { modeLabel, timeLimitLabel } from "@/lib/game-settings";
 
 // 공유 미리보기용 제목/설명. 이미지는 같은 폴더의 opengraph-image.tsx 가 자동으로 붙는다.
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -18,6 +18,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { nickname } = challenge.creator;
   const { settings } = challenge;
   const rules = [
+    modeLabel(settings),
     timeLimitLabel(settings.timeLimit),
     settings.allowMove ? "이동 허용" : "이동 금지",
     settings.allowPan ? "회전 허용" : "회전 금지",

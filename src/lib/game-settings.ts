@@ -7,6 +7,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   allowMove: true,
   allowPan: true,
   allowZoom: true,
+  itemMode: false,
 };
 
 export const TIME_LIMIT_OPTIONS = [
@@ -16,6 +17,10 @@ export const TIME_LIMIT_OPTIONS = [
   { value: 600, label: "10분" },
   { value: 0, label: "무제한" },
 ];
+
+export function modeLabel(settings: GameSettings): string {
+  return settings.itemMode ? "아이템 모드" : "노템 모드";
+}
 
 export function timeLimitLabel(seconds: number): string {
   if (seconds === 0) return "시간 제한 없음";
@@ -34,6 +39,7 @@ export function loadSettings(): GameSettings {
       allowMove: p.allowMove ?? true,
       allowPan: p.allowPan ?? true,
       allowZoom: p.allowZoom ?? true,
+      itemMode: p.itemMode ?? false,
     };
   } catch {
     return DEFAULT_SETTINGS;

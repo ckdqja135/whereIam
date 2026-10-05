@@ -156,7 +156,7 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
 
   // 아이템 사용: 힌트를 받는 데 성공했을 때만 소모한다
   const applyItem = async (id: ItemId) => {
-    if (!answer || phase !== "playing" || itemBusy || itemsLeft <= 0 || roundItems.includes(id)) return;
+    if (!settings.itemMode || !answer || phase !== "playing" || itemBusy || itemsLeft <= 0 || roundItems.includes(id)) return;
     setItemBusy(id);
     setItemMessage(null);
     const usingRound = round;
@@ -276,7 +276,7 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
           </div>
 
           {/* 아이템 (게임 전체 3회, 사용하면 이번 라운드 점수에서 감점) */}
-          {phase === "playing" && (
+          {phase === "playing" && settings.itemMode && (
             <div className="pointer-events-auto w-full rounded-lg bg-black/70 p-2 text-white">
               <p className="px-1 text-[11px] font-semibold text-white/70">
                 아이템 · 남은 횟수 <span className="text-yellow-300">{itemsLeft}</span>/{MAX_ITEMS_PER_GAME}
