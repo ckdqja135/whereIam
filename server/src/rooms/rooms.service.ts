@@ -16,12 +16,15 @@ import { MAX_ITEMS_PER_GAME } from '../challenges/items';
 import { haversineKm, ROUNDS_PER_GAME, scoreGuesses } from '../challenges/score';
 import { CreateRoomDto, JoinRoomDto } from './dto/create-room.dto';
 import { RoomStartDto } from './dto/lobby.dto';
-import { RoomAwayDto, RoomGuessDto, RoomPositionDto } from './dto/round.dto';
+import { RoomAttackDto, RoomAwayDto, RoomGuessDto, RoomPositionDto } from './dto/round.dto';
 import { loadRoomTimings, RoomTimings } from './room.config';
 import {
   ROOM_MAX_PLAYERS,
   ROOM_MIN_PLAYERS,
+  ROOM_ATTACK_DURATION_MS,
+  ROOM_ATTACKS_PER_ROUND,
   ROOM_SYSTEM_PLAYER_ID,
+  RoomAttack,
   RoomChatMessage,
   RoomJoinResponse,
   RoomRoundPlayerResult,
@@ -91,6 +94,9 @@ interface Room {
   nextChatId: number;
   // 방장이 내보낸 사람의 토큰 (같은 토큰으로 다시 들어오거나 계속 조회하지 못하게)
   kickedTokens: Set<string>;
+  // 현재 라운드 방해 아이템 기록 (라운드 시작 시 비움)
+  attacks: RoomAttack[];
+  nextAttackId: number;
 }
 
 // 실시간 대결 방. 상태는 메모리에만 있다 (PM2 fork 모드 1개 프로세스 전제, 재시작하면 사라짐).
@@ -153,6 +159,8 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       chat: [],
       nextChatId: 1,
       kickedTokens: new Set(),
+      attacks: [],
+      nextAttackId: 1,
     };
     this.rooms.set(code, room);
     return { code, playerId: host.id, token: host.token, state: this.buildState(room, host.id) };
@@ -308,6 +316,35 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     return this.buildState(room, player.id);
   }
 
+  // 방해 아이템: 아이템 모드에서 라운드마다 3번, 아직 제출하지 않은 다른 참가자에게만
+  attack(rawCode: string, token: string | undefined, dto: RoomAttackDto): RoomState {
+    const room = this.getRoom(rawCode);
+    const player = this.auth(room, token);
+    if (!room.settings.itemMode) throw new BadRequestException('아이템 모드에서만 방해할 수 있습니다');
+    if (room.status !== 'playing') throw new ConflictException('진행 중인 라운드가 없습니다');
+    if (dto.round !== room.round) throw new ConflictException('현재 라운드가 아닙니다');
+    if (dto.targetId === player.id) throw new BadRequestException('자기 자신은 방해할 수 없습니다');
+    const target = room.players.find((p) => p.id === dto.targetId && !p.left);
+    if (!target) throw new NotFoundException('참가자를 찾을 수 없습니다');
+    if (target.submission) throw new ConflictException('이미 제출한 사람은 방해할 수 없어요');
+    const used = room.attacks.filter((a) => a.fromId === player.id).length;
+    if (used >= ROOM_ATTACKS_PER_ROUND) {
+      throw new ConflictException(`방해 아이템은 라운드마다 ${ROOM_ATTACKS_PER_ROUND}번까지 쓸 수 있어요`);
+    }
+
+    const now = Date.now();
+    room.attacks.push({
+      id: room.nextAttackId++,
+      type: dto.type,
+      fromId: player.id,
+      toId: target.id,
+      at: now,
+      until: now + ROOM_ATTACK_DURATION_MS[dto.type],
+    });
+    this.changed(room);
+    return this.buildState(room, player.id);
+  }
+
   // 방장이 대기실에서 참가자를 내보낸다
   kick(rawCode: string, token: string | undefined, targetId: string): RoomState {
     const room = this.getRoom(rawCode);
@@ -391,6 +428,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     room.round = round;
     room.revealDeadline = null;
     for (const p of room.players) p.submission = null;
+    room.attacks = [];
 
     const { timeLimit } = room.settings;
     room.roundDeadline = timeLimit > 0 ? now + timeLimit * this.timings.secondMs + this.timings.graceMs : null;
@@ -655,6 +693,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       serverNow: Date.now(),
       rounds: room.rounds,
       chat: room.chat,
+      attacks: room.status === 'playing' ? room.attacks : [],
     };
   }
 }

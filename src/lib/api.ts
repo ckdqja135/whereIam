@@ -9,6 +9,7 @@ import type {
 import type {
   CreateRoomRequest,
   JoinRoomRequest,
+  RoomAttackRequest,
   RoomAwayRequest,
   RoomChatRequest,
   RoomGuessRequest,
@@ -112,6 +113,7 @@ export const roomActions = {
   next: (code: string, token: string) => roomRequest<RoomState>(code, "/next", token, post({})),
   rematch: (code: string, token: string) => roomRequest<RoomState>(code, "/rematch", token, post({})),
   leave: (code: string, token: string) => roomRequest<void>(code, "/leave", token, post({})),
+  attack: (code: string, token: string, body: RoomAttackRequest) => roomRequest<RoomState>(code, "/attack", token, post(body)),
   kick: (code: string, token: string, body: RoomKickRequest) => roomRequest<RoomState>(code, "/kick", token, post(body)),
   away: (code: string, token: string, body: RoomAwayRequest) => roomRequest<void>(code, "/away", token, post(body)),
   chat: (code: string, token: string, body: RoomChatRequest) => roomRequest<RoomState>(code, "/chat", token, post(body)),

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { roomActions } from "@/lib/api";
-import type { RoomState } from "@/lib/room-types";
+import { ROOM_ATTACKS_PER_ROUND, RoomAttackType, RoomState } from "@/lib/room-types";
+import { attackDef } from "@/lib/attacks";
 import { normalizeAvatar } from "@/lib/avatar";
 import { getAvatarPin } from "@/lib/avatar-pin";
 import type { ItemId } from "@/lib/items";
@@ -12,6 +13,8 @@ import RoadviewPane, { RoadviewHandle } from "../RoadviewPane";
 import MapPane from "../MapPane";
 import AvatarPin from "../avatar/AvatarPin";
 import { HintPanel, ItemPanel } from "../ItemPanel";
+import AttackPanel from "./AttackPanel";
+import AttackEffects from "./AttackEffects";
 
 interface RoomRoundProps {
   code: string;
@@ -52,12 +55,11 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
   const remainingMs = state.roundDeadline === null ? null : state.roundDeadline - 2000 - (now + clockOffset);
   const remaining = remainingMs === null ? null : Math.max(0, Math.ceil(remainingMs / 1000));
 
-  // 제출한 뒤에도 다른 참가자를 기다리는 동안 남은 시간이 계속 보이도록 타이머는 라운드 내내 돈다
+  // 남은 시간·방해 효과 표시를 위해 시계는 라운드 내내 돈다 (제출 후에도)
   useEffect(() => {
-    if (state.roundDeadline === null) return;
     const id = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(id);
-  }, [state.roundDeadline]);
+  }, []);
 
   const submit = useCallback(
     async (finalGuess: { lat: number; lng: number } | null, usedItems: ItemId[]) => {
@@ -108,13 +110,42 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
   };
 
   const activePlayers = state.players.filter((p) => !p.left);
+  const nicknameOf = (id: string) => state.players.find((p) => p.id === id)?.nickname ?? "누군가";
+
+  // ---------- 방해 아이템 ----------
+  const serverNow = now + clockOffset;
+  const attacks = state.attacks;
+  const attacksSupported = itemMode && attacks !== undefined;
+  const myEffects = (attacks ?? []).filter((a) => a.toId === state.me && a.until > serverNow);
+  const flipped = myEffects.some((a) => a.type === "flip");
+  const attacksLeft = ROOM_ATTACKS_PER_ROUND - (attacks ?? []).filter((a) => a.fromId === state.me).length;
+  const attackTargets = activePlayers.filter((p) => p.id !== state.me && !p.submitted);
+  // 모두에게 보여주는 최근 공격 알림 (4초)
+  const recentAttacks = (attacks ?? []).filter((a) => serverNow - a.at < 4000).slice(-3);
+  const [attackBusy, setAttackBusy] = useState(false);
+  const [attackMessage, setAttackMessage] = useState<string | null>(null);
+  const attack = async (type: RoomAttackType, targetId: string) => {
+    setAttackBusy(true);
+    setAttackMessage(null);
+    try {
+      onState(await roomActions.attack(code, token, { round: state.round, targetId, type }));
+    } catch (err) {
+      setAttackMessage(err instanceof Error ? err.message : "방해하지 못했어요.");
+    } finally {
+      setAttackBusy(false);
+    }
+  };
+
   // 왼쪽 위 현황은 총점이 높은 순으로
   const ranked = [...activePlayers].sort((a, b) => b.totalScore - a.totalScore);
   const isUrgent = remaining !== null && remaining <= 10;
 
   return (
     <div className="relative h-dvh w-screen overflow-hidden">
-      <div className={`absolute inset-0 ${view === "roadview" ? "z-0" : "-z-10"}`}>
+      <div
+        className={`absolute inset-0 ${view === "roadview" ? "z-0" : "-z-10"}`}
+        style={{ transform: flipped ? "rotate(180deg)" : undefined, transition: "transform 400ms ease" }}
+      >
         <RoadviewPane
           ref={roadviewRef}
           panoId={location.panoId}
@@ -142,6 +173,9 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
           }}
         />
       </div>
+
+      {/* 나에게 걸린 방해 효과 */}
+      <AttackEffects effects={myEffects} serverNow={serverNow} nicknameOf={nicknameOf} />
 
       {/* 상단 */}
       <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex items-start justify-between gap-2 p-4">
@@ -177,21 +211,38 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
             />
           )}
           {!submitted && <HintPanel hints={items.hints} />}
+          {attacksSupported && (
+            <AttackPanel
+              attacksLeft={attacksLeft}
+              targets={attackTargets}
+              busy={attackBusy}
+              message={attackMessage}
+              onAttack={attack}
+            />
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="pointer-events-auto rounded-lg bg-black/70 px-4 py-2 text-sm font-bold text-white">
-            라운드 {state.round}/{state.totalRounds}
-          </div>
-          {remaining !== null && (
-            <div
-              className={`pointer-events-auto rounded-lg px-4 py-2 text-sm font-bold tabular-nums ${
-                isUrgent ? "animate-pulse bg-red-600 text-white" : "bg-black/70 text-white"
-              }`}
-            >
-              {formatTime(remaining)}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            <div className="pointer-events-auto rounded-lg bg-black/70 px-4 py-2 text-sm font-bold text-white">
+              라운드 {state.round}/{state.totalRounds}
             </div>
-          )}
+            {remaining !== null && (
+              <div
+                className={`pointer-events-auto rounded-lg px-4 py-2 text-sm font-bold tabular-nums ${
+                  isUrgent ? "animate-pulse bg-red-600 text-white" : "bg-black/70 text-white"
+                }`}
+              >
+                {formatTime(remaining)}
+              </div>
+            )}
+          </div>
+          {/* 방해 아이템 알림 (모두에게) */}
+          {recentAttacks.map((a) => (
+            <div key={a.id} className="rounded-full bg-black/75 px-3 py-1 text-xs font-semibold text-white shadow">
+              {nicknameOf(a.fromId)} → {nicknameOf(a.toId)} {attackDef(a.type).emoji} {attackDef(a.type).name}!
+            </div>
+          ))}
         </div>
       </div>
 

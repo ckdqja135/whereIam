@@ -1,5 +1,6 @@
 import { ArrayMaxSize, ArrayUnique, IsArray, IsIn, IsInt, IsNotEmpty, IsNumber, IsString, Max, MaxLength, Min } from 'class-validator';
-import { ROOM_CHAT_MAX_LENGTH } from '../room.types';
+import { ROOM_ATTACK_TYPES, ROOM_CHAT_MAX_LENGTH } from '../room.types';
+import type { RoomAttackType } from '../room.types';
 import type { Guess, ItemId } from '../../challenges/challenge.types';
 import { IsGuess } from '../../challenges/dto/guess.validator';
 import { ITEM_IDS, MAX_ITEMS_PER_GAME } from '../../challenges/items';
@@ -64,4 +65,20 @@ export class RoomKickDto {
   @IsNotEmpty()
   @MaxLength(64)
   playerId: string;
+}
+
+// POST /rooms/:code/attack (아이템 모드, 라운드 진행 중)
+export class RoomAttackDto {
+  @IsInt()
+  @Min(1)
+  @Max(ROUNDS_PER_GAME)
+  round: number;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  targetId: string;
+
+  @IsIn(ROOM_ATTACK_TYPES)
+  type: RoomAttackType;
 }

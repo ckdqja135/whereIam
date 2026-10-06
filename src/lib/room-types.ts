@@ -61,6 +61,8 @@ export interface RoomState {
   rounds: RoomRoundResult[]; // 끝난 라운드들 (reveal/finished 에서 공개)
   // 채팅 (최근 50개, 오래된 순). 구버전 서버에는 없을 수 있음
   chat?: RoomChatMessage[];
+  // 현재 라운드에 쏜 방해 아이템 전체 (라운드가 바뀌면 비워짐). 구버전 서버에는 없을 수 있음
+  attacks?: RoomAttack[];
 }
 
 export interface RoomChatMessage {
@@ -127,4 +129,33 @@ export interface RoomGuessRequest {
   round: number;
   guess: Guess;
   items: ItemId[];
+}
+
+// ---------- 방해 아이템 (대결 + 아이템 모드, 라운드마다 3번) ----------
+export type RoomAttackType = "ink" | "freeze" | "flip" | "fog";
+
+// 효과 지속 시간(ms). 프론트 표시와 서버 기록이 같은 값을 쓴다
+export const ROOM_ATTACK_DURATION_MS: Record<RoomAttackType, number> = {
+  ink: 6000,
+  freeze: 5000,
+  flip: 6000,
+  fog: 7000,
+};
+export const ROOM_ATTACK_TYPES = Object.keys(ROOM_ATTACK_DURATION_MS) as RoomAttackType[];
+export const ROOM_ATTACKS_PER_ROUND = 3;
+
+export interface RoomAttack {
+  id: number;
+  type: RoomAttackType;
+  fromId: string;
+  toId: string;
+  at: number; // epoch ms (서버 시각)
+  until: number; // 효과가 끝나는 시각 (epoch ms, 서버 시각)
+}
+
+// POST /rooms/:code/attack
+export interface RoomAttackRequest {
+  round: number;
+  targetId: string;
+  type: RoomAttackType;
 }
