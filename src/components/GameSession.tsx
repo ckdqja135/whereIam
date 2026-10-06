@@ -10,8 +10,9 @@ import type { Profile } from "@/lib/profile";
 import type { GameSettings } from "@/lib/game-settings";
 import type { ChallengeLocation } from "@/lib/api-types";
 import type { RoundResult } from "@/lib/game";
-import { ITEMS, ItemId, itemDef, MAX_ITEMS_PER_GAME, roundPenalty } from "@/lib/items";
-import { getNearbyHint, getRegionHint, makeRadiusHint } from "@/lib/hints";
+import { ItemId, itemDef, roundPenalty } from "@/lib/items";
+import { useRoundItems } from "@/lib/use-round-items";
+import { HintPanel, ItemPanel } from "./ItemPanel";
 import RoadviewPane, { RoadviewHandle } from "./RoadviewPane";
 import MapPane from "./MapPane";
 import AvatarPin from "./avatar/AvatarPin";
@@ -49,13 +50,6 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
   const [roundAddress, setRoundAddress] = useState<AddressResult | null | undefined>(undefined);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(settings.timeLimit);
-  // 아이템: 이번 라운드에 쓴 것 / 받은 힌트
-  const [roundItems, setRoundItems] = useState<ItemId[]>([]);
-  const [itemBusy, setItemBusy] = useState<ItemId | null>(null);
-  const [itemMessage, setItemMessage] = useState<string | null>(null);
-  const [regionHint, setRegionHint] = useState<string | null>(null);
-  const [nearbyHint, setNearbyHint] = useState<string | null>(null);
-  const [circleHint, setCircleHint] = useState<{ lat: number; lng: number; radius: number } | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const roadviewRef = useRef<RoadviewHandle>(null);
@@ -67,9 +61,9 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
 
   const pinSrc = useMemo(() => getAvatarPin(profile.avatar), [profile.avatar]);
   const totalScore = results.reduce((sum, r) => sum + r.score, 0);
-  // 게임 전체에서 쓴 아이템 수 (지난 라운드 + 이번 라운드)
-  const itemsUsed = results.reduce((sum, r) => sum + r.items.length, 0) + (phase === "submitted" ? 0 : roundItems.length);
-  const itemsLeft = MAX_ITEMS_PER_GAME - itemsUsed;
+  // 아이템: 지난 라운드까지 쓴 개수 + 이번 라운드 상태
+  const items = useRoundItems(settings.itemMode ?? false, results.reduce((sum, r) => sum + r.items.length, 0));
+  const { roundItems, reset: resetItems } = items;
 
   const startRound = useCallback(
     async (roundNumber: number) => {
@@ -79,12 +73,7 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
       setDistance(null);
       setRoundScore(0);
       setRoundAddress(undefined);
-      setRoundItems([]);
-      setItemBusy(null);
-      setItemMessage(null);
-      setRegionHint(null);
-      setNearbyHint(null);
-      setCircleHint(null);
+      resetItems();
       setErrorMsg(null);
       setRemainingSeconds(settings.timeLimit);
 
@@ -97,7 +86,7 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
         setPhase("error");
       }
     },
-    [locations, settings.timeLimit]
+    [locations, settings.timeLimit, resetItems]
   );
 
   // 첫 라운드
@@ -154,39 +143,10 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
     });
   }, [answer, guessCoord, round, roundItems]);
 
-  // 아이템 사용: 힌트를 받는 데 성공했을 때만 소모한다
   const applyItem = async (id: ItemId) => {
-    if (!settings.itemMode || !answer || phase !== "playing" || itemBusy || itemsLeft <= 0 || roundItems.includes(id)) return;
-    setItemBusy(id);
-    setItemMessage(null);
-    const usingRound = round;
-    let ok = false;
-    try {
-      if (id === "region") {
-        const region = await getRegionHint(answer.lat, answer.lng);
-        if (region) {
-          setRegionHint(region);
-          ok = true;
-        }
-      } else if (id === "radius") {
-        setCircleHint(makeRadiusHint(answer.lat, answer.lng));
-        setView("map");
-        ok = true;
-      } else {
-        const nearby = await getNearbyHint(answer.lat, answer.lng);
-        if (nearby) {
-          setNearbyHint(nearby);
-          ok = true;
-        }
-      }
-    } finally {
-      // 응답을 기다리는 사이 라운드가 넘어갔으면 반영하지 않는다
-      if (roundRef.current === usingRound) {
-        if (ok) setRoundItems((prev) => [...prev, id]);
-        else setItemMessage(`${itemDef(id).name}를 찾지 못했어요. 아이템은 소모되지 않았어요.`);
-        setItemBusy(null);
-      }
-    }
+    if (!answer || phase !== "playing") return;
+    const showMap = await items.apply(id, answer);
+    if (showMap) setView("map");
   };
 
   // 로드뷰가 실제로 열린 파노라마 좌표로 정답을 보정한다.
@@ -259,7 +219,7 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
             distanceFormatted={distance?.formatted ?? null}
             isSubmitted={phase === "submitted"}
             pinSrc={pinSrc}
-            hintCircle={circleHint}
+            hintCircle={items.hints.circle}
             onClickPosition={handleMapClick}
           />
         )}
@@ -277,44 +237,15 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
 
           {/* 아이템 (게임 전체 3회, 사용하면 이번 라운드 점수에서 감점) */}
           {phase === "playing" && settings.itemMode && (
-            <div className="pointer-events-auto w-full rounded-lg bg-black/70 p-2 text-white">
-              <p className="px-1 text-[11px] font-semibold text-white/70">
-                아이템 · 남은 횟수 <span className="text-yellow-300">{itemsLeft}</span>/{MAX_ITEMS_PER_GAME}
-              </p>
-              <div className="mt-1.5 flex flex-col gap-1">
-                {ITEMS.map((item) => {
-                  const used = roundItems.includes(item.id);
-                  const disabled = used || itemsLeft <= 0 || itemBusy !== null;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => applyItem(item.id)}
-                      disabled={disabled}
-                      title={item.description}
-                      className="flex items-center justify-between gap-2 rounded-md bg-white/10 px-2.5 py-1.5 text-left text-xs font-semibold transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <span>
-                        {item.emoji} {item.name}
-                        {used && " ✓"}
-                        {itemBusy === item.id && " …"}
-                      </span>
-                      <span className="tabular-nums text-red-300">-{item.penalty.toLocaleString()}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {itemMessage && <p className="mt-1.5 px-1 text-[11px] text-red-300">{itemMessage}</p>}
-            </div>
+            <ItemPanel
+              itemsLeft={items.itemsLeft}
+              roundItems={roundItems}
+              busy={items.busy}
+              message={items.message}
+              onUse={applyItem}
+            />
           )}
-
-          {/* 받은 힌트 */}
-          {phase === "playing" && (regionHint || nearbyHint || circleHint) && (
-            <div className="pointer-events-auto w-full space-y-1 rounded-lg bg-violet-700/90 p-2.5 text-xs text-white shadow-lg">
-              {regionHint && <p>🗺️ 정답은 <b>{regionHint}</b>에 있어요</p>}
-              {circleHint && <p>🎯 지도에 표시된 <b>보라색 원 안</b>에 있어요</p>}
-              {nearbyHint && <p>🏫 근처에 <b>{nearbyHint}</b></p>}
-            </div>
-          )}
+          {phase === "playing" && <HintPanel hints={items.hints} />}
         </div>
 
         <div className="flex items-center gap-2">

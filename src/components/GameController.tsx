@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createRoom, isApiConfigured, joinRoom } from "@/lib/api";
+import { saveRoomCredentials } from "@/lib/use-room";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useKakaoSdk } from "@/lib/use-kakao-sdk";
 import { loadProfile, Profile, saveProfile } from "@/lib/profile";
@@ -22,6 +25,7 @@ export default function GameController() {
 
 function HomeGame() {
   const sdk = useKakaoSdk();
+  const router = useRouter();
   const [screen, setScreen] = useState<Screen>("lobby");
   // 저장된 프로필/설정 (브라우저에서만 렌더링되므로 바로 읽을 수 있다)
   const [profile, setProfile] = useState<Profile | null>(loadProfile);
@@ -83,6 +87,20 @@ function HomeGame() {
       initialSettings={settings}
       sdkReady={sdk.ready}
       sdkError={sdk.error}
+      roomsAvailable={isApiConfigured()}
+      onCreateRoom={async (nextProfile, nextSettings) => {
+        saveProfile(nextProfile);
+        saveSettings(nextSettings);
+        const res = await createRoom({ player: nextProfile, settings: nextSettings });
+        saveRoomCredentials(res.code, { playerId: res.playerId, token: res.token });
+        router.push(`/room/${res.code}`);
+      }}
+      onJoinRoom={async (code, nextProfile) => {
+        saveProfile(nextProfile);
+        const res = await joinRoom(code, { player: nextProfile });
+        saveRoomCredentials(res.code, { playerId: res.playerId, token: res.token });
+        router.push(`/room/${res.code}`);
+      }}
       onStart={(nextProfile, nextSettings) => {
         saveProfile(nextProfile);
         saveSettings(nextSettings);

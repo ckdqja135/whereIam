@@ -6,6 +6,7 @@ import { ChallengesModule } from './challenges/challenges.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health.controller';
 import { createProxySecretMiddleware } from './proxy-secret.middleware';
+import { RoomsModule } from './rooms/rooms.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { createProxySecretMiddleware } from './proxy-secret.middleware';
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 60 }]),
     DatabaseModule,
     ChallengesModule,
+    RoomsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
