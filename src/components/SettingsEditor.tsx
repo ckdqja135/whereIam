@@ -4,7 +4,7 @@ import { GameSettings, TIME_LIMIT_OPTIONS } from "@/lib/game-settings";
 
 const MODES = [
   { itemMode: false, emoji: "🚫", title: "노템 모드", desc: "실력만으로 승부" },
-  { itemMode: true, emoji: "🎁", title: "아이템 모드", desc: "힌트 3번 (감점 있음)" },
+  { itemMode: true, emoji: "🎁", title: "아이템 모드", desc: "힌트 + 대결 방해 아이템" },
 ];
 
 const RULES: { key: "allowMove" | "allowPan" | "allowZoom"; label: string }[] = [
@@ -87,9 +87,14 @@ export default function SettingsEditor({ settings, onChange, disabled }: Setting
       </div>
 
       {settings.itemMode && (
-        <p className="mt-5 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800">
-          💡 게임 중 힌트 아이템(지역·범위·주변 장소)을 <b>최대 3번</b> 쓸 수 있어요. 대신 그 라운드 점수가 깎여요.
-        </p>
+        <div className="mt-5 space-y-1.5 rounded-lg bg-violet-50 px-3 py-2.5 text-xs leading-relaxed text-violet-800">
+          <p>
+            💡 <b>힌트</b>(지역·범위·주변 장소): 게임당 <b>최대 3번</b>. 쓰면 그 라운드 점수가 깎여요.
+          </p>
+          <p>
+            ⚔️ <b>방해</b>(먹물·얼음·뒤집기·안개): 친구와 대결할 때만, <b>라운드마다 3번</b>. 감점 없이 상대 화면을 잠깐 방해해요.
+          </p>
+        </div>
       )}
     </div>
   );
