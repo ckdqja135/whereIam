@@ -14,6 +14,7 @@ import RoomLobby from "./RoomLobby";
 import RoomRound from "./RoomRound";
 import RoomReveal from "./RoomReveal";
 import RoomFinished from "./RoomFinished";
+import RoomChat from "./RoomChat";
 
 // /room/[code]: 참가 → 대기실 → 라운드 진행/결과 → 최종 순위
 export default function RoomController({ code }: { code: string }) {
@@ -112,6 +113,8 @@ function RoomSession({ code, creds, onReset }: { code: string; creds: RoomCreden
     <>
       {banner}
       {screen}
+      {/* 채팅은 화면이 바뀌어도 유지 (대기실에서는 열린 채로 시작) */}
+      <RoomChat code={code} token={creds.token} state={state} onState={applyState} defaultOpen={state.status === "lobby"} />
     </>
   );
 }

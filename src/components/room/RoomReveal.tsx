@@ -94,7 +94,14 @@ export default function RoomReveal({ code, token, state, clockOffset, onState }:
                 <span className="w-5 text-center text-sm font-bold text-gray-400">{i + 1}</span>
                 <AvatarPin avatar={normalizeAvatar(p?.avatar)} size={30} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-gray-900">{p?.nickname ?? "?"}</p>
+                  <p className="truncate text-sm font-semibold text-gray-900">
+                    {p?.nickname ?? "?"}
+                    {(p?.awayCount ?? 0) > 0 && (
+                      <span className="ml-1 text-xs font-normal text-amber-600" title="라운드 중 다른 탭/창으로 나간 횟수">
+                        ⚠️ 자리 비움 {p?.awayCount}회
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-gray-500">
                     {formatKm(r.distanceKm)}
                     {r.penalty > 0 && (

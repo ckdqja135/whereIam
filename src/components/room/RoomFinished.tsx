@@ -53,6 +53,11 @@ export default function RoomFinished({ code, token, state, onState, onLeave }: R
                 <p className="truncate font-bold">
                   {p.nickname}
                   {p.left && <span className="ml-1 text-xs font-normal text-white/50">(나감)</span>}
+                  {(p.awayCount ?? 0) > 0 && (
+                    <span className="ml-1 text-xs font-normal text-yellow-300" title="라운드 중 다른 탭/창으로 나간 횟수">
+                      ⚠️{p.awayCount}
+                    </span>
+                  )}
                 </p>
                 <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
                   <div className="h-full rounded-full bg-blue-400" style={{ width: `${(p.totalScore / maxTotal) * 100}%` }} />

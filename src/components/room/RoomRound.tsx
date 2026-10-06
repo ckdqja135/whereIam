@@ -7,6 +7,7 @@ import { normalizeAvatar } from "@/lib/avatar";
 import { getAvatarPin } from "@/lib/avatar-pin";
 import type { ItemId } from "@/lib/items";
 import { useRoundItems } from "@/lib/use-round-items";
+import { useAntiCheat } from "@/lib/use-anti-cheat";
 import RoadviewPane, { RoadviewHandle } from "../RoadviewPane";
 import MapPane from "../MapPane";
 import AvatarPin from "../avatar/AvatarPin";
@@ -51,11 +52,12 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
   const remainingMs = state.roundDeadline === null ? null : state.roundDeadline - 2000 - (now + clockOffset);
   const remaining = remainingMs === null ? null : Math.max(0, Math.ceil(remainingMs / 1000));
 
+  // 제출한 뒤에도 다른 참가자를 기다리는 동안 남은 시간이 계속 보이도록 타이머는 라운드 내내 돈다
   useEffect(() => {
-    if (state.roundDeadline === null || submitted) return;
+    if (state.roundDeadline === null) return;
     const id = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(id);
-  }, [state.roundDeadline, submitted]);
+  }, [state.roundDeadline]);
 
   const submit = useCallback(
     async (finalGuess: { lat: number; lng: number } | null, usedItems: ItemId[]) => {
@@ -94,6 +96,11 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
     [code, token, state.round]
   );
 
+  // 제출 전까지: 개발자 도구 단축키/우클릭 막기 + 다른 탭/창으로 나가면 서버에 기록
+  useAntiCheat(!submitted, () => {
+    roomActions.away(code, token, { round: state.round }).catch(() => {});
+  });
+
   const applyItem = async (id: ItemId) => {
     if (submitted) return;
     const showMap = await items.apply(id, answer);
@@ -101,6 +108,8 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
   };
 
   const activePlayers = state.players.filter((p) => !p.left);
+  // 왼쪽 위 현황은 총점이 높은 순으로
+  const ranked = [...activePlayers].sort((a, b) => b.totalScore - a.totalScore);
   const isUrgent = remaining !== null && remaining <= 10;
 
   return (
@@ -139,13 +148,19 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
         <div className="flex max-w-[16rem] flex-col items-start gap-2">
           {/* 참가자 제출 현황 */}
           <div className="pointer-events-auto w-full rounded-lg bg-black/70 p-2 text-white">
-            {activePlayers.map((p) => (
+            {ranked.map((p, i) => (
               <div key={p.id} className="flex items-center gap-2 py-0.5 text-xs">
+                <span className="w-3 text-center text-white/50">{i + 1}</span>
                 <AvatarPin avatar={normalizeAvatar(p.avatar)} size={22} />
                 <span className={`flex-1 truncate ${p.id === state.me ? "font-bold" : ""}`}>
                   {p.nickname}
                   {!p.connected && " (연결 끊김)"}
                 </span>
+                {(p.awayCount ?? 0) > 0 && (
+                  <span className="text-yellow-300" title="라운드 중 다른 탭/창으로 나간 횟수">
+                    ⚠️{p.awayCount}
+                  </span>
+                )}
                 <span className="tabular-nums text-white/70">{p.totalScore.toLocaleString()}</span>
                 <span className={p.submitted ? "text-green-400" : "text-white/40"}>{p.submitted ? "✓" : "…"}</span>
               </div>
@@ -168,7 +183,7 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
           <div className="pointer-events-auto rounded-lg bg-black/70 px-4 py-2 text-sm font-bold text-white">
             라운드 {state.round}/{state.totalRounds}
           </div>
-          {remaining !== null && !submitted && (
+          {remaining !== null && (
             <div
               className={`pointer-events-auto rounded-lg px-4 py-2 text-sm font-bold tabular-nums ${
                 isUrgent ? "animate-pulse bg-red-600 text-white" : "bg-black/70 text-white"
@@ -188,6 +203,9 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
             <p className="mt-1 text-sm text-gray-500">
               다른 참가자를 기다리는 중… ({activePlayers.filter((p) => p.submitted).length}/{activePlayers.length})
             </p>
+            {remaining !== null && (
+              <p className="mt-1 text-xs text-gray-400">시간이 끝나면 아직 안 낸 사람은 자동 제출돼요 · 남은 시간 {formatTime(remaining)}</p>
+            )}
           </div>
         ) : (
           <>

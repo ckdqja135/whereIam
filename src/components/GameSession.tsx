@@ -12,6 +12,7 @@ import type { ChallengeLocation } from "@/lib/api-types";
 import type { RoundResult } from "@/lib/game";
 import { ItemId, itemDef, roundPenalty } from "@/lib/items";
 import { useRoundItems } from "@/lib/use-round-items";
+import { useAntiCheat } from "@/lib/use-anti-cheat";
 import { HintPanel, ItemPanel } from "./ItemPanel";
 import RoadviewPane, { RoadviewHandle } from "./RoadviewPane";
 import MapPane from "./MapPane";
@@ -142,6 +143,9 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
       setResults((prev) => prev.map((r, i) => (i === roundIndex ? { ...r, address } : r)));
     });
   }, [answer, guessCoord, round, roundItems]);
+
+  // 라운드 진행 중 개발자 도구 단축키/우클릭 막기
+  useAntiCheat(phase === "playing");
 
   const applyItem = async (id: ItemId) => {
     if (!answer || phase !== "playing") return;

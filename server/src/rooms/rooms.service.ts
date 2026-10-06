@@ -16,11 +16,12 @@ import { MAX_ITEMS_PER_GAME } from '../challenges/items';
 import { haversineKm, ROUNDS_PER_GAME, scoreGuesses } from '../challenges/score';
 import { CreateRoomDto, JoinRoomDto } from './dto/create-room.dto';
 import { RoomStartDto } from './dto/lobby.dto';
-import { RoomGuessDto, RoomPositionDto } from './dto/round.dto';
+import { RoomAwayDto, RoomGuessDto, RoomPositionDto } from './dto/round.dto';
 import { loadRoomTimings, RoomTimings } from './room.config';
 import {
   ROOM_MAX_PLAYERS,
   ROOM_MIN_PLAYERS,
+  RoomChatMessage,
   RoomJoinResponse,
   RoomRoundPlayerResult,
   RoomRoundResult,
@@ -35,6 +36,9 @@ const CODE_LENGTH = 6;
 const MAX_ROOMS = 500;
 // 보고된 파노라마 좌표가 저장된 위치에서 이 거리(km) 안일 때만 정답 보정
 const POSITION_CORRECTION_KM = 1;
+// 채팅: 방마다 최근 메시지만 보관, 한 사람이 너무 빨리 보내지 못하게 간격 제한
+const CHAT_HISTORY = 50;
+const CHAT_MIN_INTERVAL_MS = 700;
 
 interface Submission {
   guess: Guess;
@@ -55,6 +59,9 @@ interface InternalPlayer {
   polling: number;
   totalScore: number;
   itemsUsed: number;
+  // 라운드 진행 중 다른 탭/창으로 나간 횟수 (게임마다 초기화)
+  awayCount: number;
+  lastChatAt: number;
   // 현재 라운드 제출 (라운드가 끝나면 미제출자는 { guess: null, items: [] } 로 채운다)
   submission: Submission | null;
 }
@@ -79,6 +86,8 @@ interface Room {
   revealTimer: NodeJS.Timeout | null;
   // 롱 폴링 대기자. 상태가 바뀌면 모두 깨운다
   waiters: Set<() => void>;
+  chat: RoomChatMessage[];
+  nextChatId: number;
 }
 
 // 실시간 대결 방. 상태는 메모리에만 있다 (PM2 fork 모드 1개 프로세스 전제, 재시작하면 사라짐).
@@ -138,6 +147,8 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       roundTimer: null,
       revealTimer: null,
       waiters: new Set(),
+      chat: [],
+      nextChatId: 1,
     };
     this.rooms.set(code, room);
     return { code, playerId: host.id, token: host.token, state: this.buildState(room, host.id) };
@@ -223,6 +234,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     for (const p of room.players) {
       p.totalScore = 0;
       p.itemsUsed = 0;
+      p.awayCount = 0;
       p.submission = null;
     }
     this.startRound(room, 1);
@@ -269,6 +281,30 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     return this.buildState(room, player.id);
   }
 
+  // 부정행위 감지: 라운드 진행 중(제출 전) 다른 탭/창으로 나가면 횟수를 올려 모두에게 보여준다
+  reportAway(rawCode: string, token: string | undefined, dto: RoomAwayDto): void {
+    const room = this.getRoom(rawCode);
+    const player = this.auth(room, token);
+    if (room.status !== 'playing' || dto.round !== room.round || player.submission) return;
+    player.awayCount++;
+    this.changed(room);
+  }
+
+  chat(rawCode: string, token: string | undefined, rawText: string): RoomState {
+    const room = this.getRoom(rawCode);
+    const player = this.auth(room, token);
+    // 제어 문자 제거, 공백 정리
+    const text = rawText.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!text) throw new BadRequestException('메시지를 입력해 주세요');
+    const now = Date.now();
+    if (now - player.lastChatAt < CHAT_MIN_INTERVAL_MS) throw new ConflictException('조금 천천히 보내 주세요');
+    player.lastChatAt = now;
+    room.chat.push({ id: room.nextChatId++, playerId: player.id, nickname: player.nickname, text, at: now });
+    if (room.chat.length > CHAT_HISTORY) room.chat.splice(0, room.chat.length - CHAT_HISTORY);
+    this.changed(room);
+    return this.buildState(room, player.id);
+  }
+
   next(rawCode: string, token: string | undefined): RoomState {
     const room = this.getRoom(rawCode);
     const player = this.auth(room, token);
@@ -297,6 +333,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     for (const p of room.players) {
       p.totalScore = 0;
       p.itemsUsed = 0;
+      p.awayCount = 0;
       p.submission = null;
       if (p.id !== room.hostId) p.ready = false;
     }
@@ -491,6 +528,8 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       polling: 0,
       totalScore: 0,
       itemsUsed: 0,
+      awayCount: 0,
+      lastChatAt: 0,
       submission: null,
     };
   }
@@ -580,6 +619,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         totalScore: p.totalScore,
         submitted: p.submission !== null,
         itemsUsed: p.itemsUsed,
+        awayCount: p.awayCount,
       })),
       round: room.round,
       totalRounds: ROUNDS_PER_GAME,
@@ -588,6 +628,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       revealDeadline: room.revealDeadline,
       serverNow: Date.now(),
       rounds: room.rounds,
+      chat: room.chat,
     };
   }
 }

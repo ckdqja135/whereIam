@@ -24,6 +24,8 @@ export interface RoomPlayer {
   totalScore: number;
   submitted: boolean; // 현재 라운드 제출 여부 (playing 일 때만 의미)
   itemsUsed: number; // 이번 게임에서 쓴 아이템 수
+  // 부정행위 감지: 이번 게임에서 라운드 진행 중 다른 탭/창으로 나간 횟수 (구버전 서버에는 없을 수 있음)
+  awayCount?: number;
 }
 
 export interface RoomRoundPlayerResult {
@@ -57,7 +59,19 @@ export interface RoomState {
   revealDeadline: number | null; // reveal 상태에서 다음 라운드로 자동 진행되는 시각 (epoch ms)
   serverNow: number; // 서버 현재 시각 (epoch ms). 클라이언트 시계 보정용
   rounds: RoomRoundResult[]; // 끝난 라운드들 (reveal/finished 에서 공개)
+  // 채팅 (최근 50개, 오래된 순). 구버전 서버에는 없을 수 있음
+  chat?: RoomChatMessage[];
 }
+
+export interface RoomChatMessage {
+  id: number;
+  playerId: string;
+  nickname: string;
+  text: string;
+  at: number; // epoch ms
+}
+
+export const ROOM_CHAT_MAX_LENGTH = 100;
 
 // POST /rooms
 export interface CreateRoomRequest {
@@ -93,6 +107,14 @@ export interface RoomPositionRequest {
   round: number;
   lat: number;
   lng: number;
+}
+// POST /rooms/:code/chat
+export interface RoomChatRequest {
+  text: string;
+}
+// POST /rooms/:code/away — 라운드 진행 중 다른 탭/창으로 나갔을 때
+export interface RoomAwayRequest {
+  round: number;
 }
 // POST /rooms/:code/guess
 export interface RoomGuessRequest {

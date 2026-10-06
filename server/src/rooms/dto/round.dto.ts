@@ -1,4 +1,5 @@
-import { ArrayMaxSize, ArrayUnique, IsArray, IsIn, IsInt, IsNumber, Max, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsIn, IsInt, IsNumber, IsString, Max, MaxLength, Min } from 'class-validator';
+import { ROOM_CHAT_MAX_LENGTH } from '../room.types';
 import type { Guess, ItemId } from '../../challenges/challenge.types';
 import { IsGuess } from '../../challenges/dto/guess.validator';
 import { ITEM_IDS, MAX_ITEMS_PER_GAME } from '../../challenges/items';
@@ -40,4 +41,19 @@ export class RoomGuessDto {
   @ArrayUnique()
   @IsIn(ITEM_IDS, { each: true })
   items: ItemId[];
+}
+
+// POST /rooms/:code/away — 라운드 진행 중 다른 탭/창으로 나감
+export class RoomAwayDto {
+  @IsInt()
+  @Min(1)
+  @Max(ROUNDS_PER_GAME)
+  round: number;
+}
+
+// POST /rooms/:code/chat (공백 제거 후 빈 문자열은 서비스에서 400)
+export class RoomChatDto {
+  @IsString()
+  @MaxLength(ROOM_CHAT_MAX_LENGTH)
+  text: string;
 }
