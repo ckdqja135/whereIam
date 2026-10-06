@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://where-iam.vercel.app";
 const TITLE = "Where I Am - 지도에서 위치 찾기";
-const DESCRIPTION = "카카오맵 로드뷰를 보고 위치를 맞추는 GeoGuessr 스타일 게임";
+const DESCRIPTION = "로드뷰를 보고 대한민국 어디인지 위치를 맞추는 게임";
 
 // 모바일: 기기 폭에 맞추고, 노치/홈 바 영역까지 쓰되 safe-area 로 여백을 준다
 export const viewport: Viewport = {
