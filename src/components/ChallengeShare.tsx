@@ -61,7 +61,7 @@ export default function ChallengeShare({ profile, settings, results }: Challenge
               readOnly
               value={link}
               onFocus={(e) => e.currentTarget.select()}
-              className="min-w-0 flex-1 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs text-gray-800"
+              className="min-w-0 flex-1 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-base text-gray-800 sm:text-xs"
             />
             <button
               onClick={handleCopy}

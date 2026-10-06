@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useKakaoSdk } from "@/lib/use-kakao-sdk";
+import { useBlockDevtools } from "@/lib/use-anti-cheat";
 import { joinRoom, roomActions } from "@/lib/api";
 import { randomAvatar } from "@/lib/avatar";
 import { loadProfile, NICKNAME_MAX, saveProfile, validateNickname } from "@/lib/profile";
@@ -42,6 +43,8 @@ function RoomSession({ code, creds, onReset }: { code: string; creds: RoomCreden
   const router = useRouter();
   const sdk = useKakaoSdk();
   const { state, applyState, fatal, offline, clockOffset } = useRoomState(code, creds.token, null);
+  // 대결 방에 있는 동안(대기실·라운드·결과 모두) 개발자 도구 단축키와 우클릭을 막는다
+  useBlockDevtools(true);
 
   const leave = () => {
     roomActions.leave(code, creds.token).catch(() => {});

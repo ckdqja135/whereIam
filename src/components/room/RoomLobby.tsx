@@ -90,7 +90,7 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
             value={inviteUrl}
             onFocus={(e) => e.currentTarget.select()}
             aria-label="초대 링크"
-            className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700"
+            className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-base text-gray-700 sm:text-xs"
           />
           <button onClick={copyInvite} className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700">
             {copied ? "복사됨!" : "초대 링크 복사"}

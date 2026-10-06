@@ -270,7 +270,7 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
       </div>
 
       {/* 하단: 액션 버튼들 */}
-      <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex flex-col items-center gap-3 p-4">
+      <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex flex-col items-center gap-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {/* 제출 결과 */}
         {phase === "submitted" && (
           <div className="pointer-events-auto min-w-64 rounded-xl bg-white px-6 py-4 text-center shadow-lg">

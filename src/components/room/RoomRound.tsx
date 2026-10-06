@@ -7,7 +7,7 @@ import { normalizeAvatar } from "@/lib/avatar";
 import { getAvatarPin } from "@/lib/avatar-pin";
 import type { ItemId } from "@/lib/items";
 import { useRoundItems } from "@/lib/use-round-items";
-import { useAntiCheat } from "@/lib/use-anti-cheat";
+import { useAwayDetector } from "@/lib/use-anti-cheat";
 import RoadviewPane, { RoadviewHandle } from "../RoadviewPane";
 import MapPane from "../MapPane";
 import AvatarPin from "../avatar/AvatarPin";
@@ -96,8 +96,8 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
     [code, token, state.round]
   );
 
-  // 제출 전까지: 개발자 도구 단축키/우클릭 막기 + 다른 탭/창으로 나가면 서버에 기록
-  useAntiCheat(!submitted, () => {
+  // 제출 전까지 다른 탭/창으로 나가면 서버에 기록 (단축키·우클릭 차단은 방 전체에서 RoomController 가 담당)
+  useAwayDetector(!submitted, () => {
     roomActions.away(code, token, { round: state.round }).catch(() => {});
   });
 
@@ -196,7 +196,7 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
       </div>
 
       {/* 하단 */}
-      <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex flex-col items-center gap-3 p-4">
+      <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex flex-col items-center gap-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {submitted ? (
           <div className="pointer-events-auto rounded-xl bg-white px-6 py-4 text-center shadow-lg">
             <p className="text-lg font-bold text-gray-900">제출 완료!</p>
