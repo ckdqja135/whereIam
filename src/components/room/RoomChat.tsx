@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { roomActions } from "@/lib/api";
-import { ROOM_CHAT_MAX_LENGTH, RoomChatMessage, RoomState } from "@/lib/room-types";
+import { ROOM_CHAT_MAX_LENGTH, ROOM_SYSTEM_PLAYER_ID, RoomChatMessage, RoomState } from "@/lib/room-types";
 import { normalizeAvatar } from "@/lib/avatar";
 import AvatarPin from "../avatar/AvatarPin";
 
@@ -125,6 +125,15 @@ export default function RoomChat({ code, token, state, onState, defaultOpen = fa
               const time = showTime && (
                 <span className="shrink-0 self-end pb-0.5 text-[10px] leading-none text-gray-600">{formatTime(m.at)}</span>
               );
+
+              // 시스템 안내 (강퇴 등): 가운데 회색 알림
+              if (m.playerId === ROOM_SYSTEM_PLAYER_ID) {
+                return (
+                  <div key={m.id} className="mt-2.5 flex justify-center">
+                    <span className="rounded-full bg-black/15 px-3 py-1 text-[11px] text-gray-800">{m.text}</span>
+                  </div>
+                );
+              }
 
               if (mine) {
                 return (

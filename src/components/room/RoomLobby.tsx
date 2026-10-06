@@ -29,6 +29,8 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
   const [preparing, setPreparing] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // 내보내기 확인 중인 참가자 (한 번 더 눌러야 확정)
+  const [kickTarget, setKickTarget] = useState<string | null>(null);
 
   const players = state.players.filter((p) => !p.left);
   const others = players.filter((p) => p.id !== state.hostId);
@@ -68,6 +70,11 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
     }
   };
 
+  const kick = (playerId: string) => {
+    setKickTarget(null);
+    run(() => roomActions.kick(code, token, { playerId }));
+  };
+
   const copyInvite = async () => {
     try {
       await navigator.clipboard.writeText(inviteUrl);
@@ -79,7 +86,7 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
   };
 
   return (
-    <div className="h-screen overflow-y-auto bg-gradient-to-b from-indigo-950 via-gray-900 to-gray-900 px-4 py-8">
+    <div className="h-dvh overflow-y-auto bg-gradient-to-b from-indigo-950 via-gray-900 to-gray-900 px-4 py-8">
       <div className="mx-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-xl sm:p-8">
         <p className="text-center text-sm text-gray-500">대결 대기실</p>
         <p className="mt-1 text-center font-mono text-4xl font-black tracking-[0.3em] text-gray-900">{code}</p>
@@ -129,6 +136,32 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
                     {!p.connected ? "연결 끊김" : host ? "방장" : p.ready ? "준비 완료" : "준비 중"}
                   </p>
                 </div>
+                {/* 방장만: 다른 참가자 내보내기 (두 번 눌러 확정) */}
+                {isHost && !host && (
+                  kickTarget === p.id ? (
+                    <div className="flex shrink-0 flex-col gap-1">
+                      <button
+                        onClick={() => kick(p.id)}
+                        disabled={busy}
+                        className="rounded-md bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-700"
+                      >
+                        내보내기
+                      </button>
+                      <button onClick={() => setKickTarget(null)} className="rounded-md px-2 py-0.5 text-[11px] text-gray-500 hover:bg-gray-200">
+                        취소
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setKickTarget(p.id)}
+                      aria-label={`${p.nickname} 내보내기`}
+                      title="내보내기"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm text-gray-400 hover:bg-red-50 hover:text-red-600"
+                    >
+                      ✕
+                    </button>
+                  )
+                )}
               </li>
             );
           })}

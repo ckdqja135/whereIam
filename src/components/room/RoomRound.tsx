@@ -113,7 +113,7 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
   const isUrgent = remaining !== null && remaining <= 10;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden">
+    <div className="relative h-dvh w-screen overflow-hidden">
       <div className={`absolute inset-0 ${view === "roadview" ? "z-0" : "-z-10"}`}>
         <RoadviewPane
           ref={roadviewRef}

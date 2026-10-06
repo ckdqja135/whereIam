@@ -73,7 +73,7 @@ export default function RoomReveal({ code, token, state, clockOffset, onState }:
   };
 
   return (
-    <div className="flex h-screen flex-col bg-gray-900 md:flex-row">
+    <div className="flex h-dvh flex-col bg-gray-900 md:flex-row">
       <div className="h-[45vh] w-full shrink-0 md:h-full md:flex-1">
         <RoundRevealMap answer={result.answer} entries={entries} />
       </div>

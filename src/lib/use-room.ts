@@ -73,7 +73,8 @@ export function useRoomState(code: string, token: string | null, initial: RoomSt
         } catch (err) {
           if (stopped) return;
           if (err instanceof ApiError && (err.status === 404 || err.status === 403)) {
-            setFatal(err.status === 404 ? "방이 사라졌어요. 모두 나갔거나 오래 비어 있었어요." : "이 방에 참가한 정보가 없어요.");
+            // 403 은 서버 안내를 그대로 보여준다 ("방장이 방에서 내보냈어요" 등)
+            setFatal(err.status === 404 ? "방이 사라졌어요. 모두 나갔거나 오래 비어 있었어요." : err.message);
             return;
           }
           // 일시적인 네트워크 오류: 잠시 후 재시도

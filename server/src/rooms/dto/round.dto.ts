@@ -1,4 +1,4 @@
-import { ArrayMaxSize, ArrayUnique, IsArray, IsIn, IsInt, IsNumber, IsString, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsIn, IsInt, IsNotEmpty, IsNumber, IsString, Max, MaxLength, Min } from 'class-validator';
 import { ROOM_CHAT_MAX_LENGTH } from '../room.types';
 import type { Guess, ItemId } from '../../challenges/challenge.types';
 import { IsGuess } from '../../challenges/dto/guess.validator';
@@ -56,4 +56,12 @@ export class RoomChatDto {
   @IsString()
   @MaxLength(ROOM_CHAT_MAX_LENGTH)
   text: string;
+}
+
+// POST /rooms/:code/kick (방장, 대기실)
+export class RoomKickDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  playerId: string;
 }

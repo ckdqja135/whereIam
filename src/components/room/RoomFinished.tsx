@@ -35,7 +35,7 @@ export default function RoomFinished({ code, token, state, onState, onLeave }: R
   };
 
   return (
-    <div className="h-screen overflow-y-auto bg-gradient-to-b from-indigo-950 via-[#241a46] to-gray-900 px-4 py-10 text-white">
+    <div className="h-dvh overflow-y-auto bg-gradient-to-b from-indigo-950 via-[#241a46] to-gray-900 px-4 py-10 text-white">
       <div className="mx-auto flex max-w-md flex-col items-center">
         <h1 className="text-3xl font-extrabold italic">최종 결과</h1>
 

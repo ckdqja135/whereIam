@@ -21,6 +21,7 @@ import { loadRoomTimings, RoomTimings } from './room.config';
 import {
   ROOM_MAX_PLAYERS,
   ROOM_MIN_PLAYERS,
+  ROOM_SYSTEM_PLAYER_ID,
   RoomChatMessage,
   RoomJoinResponse,
   RoomRoundPlayerResult,
@@ -88,6 +89,8 @@ interface Room {
   waiters: Set<() => void>;
   chat: RoomChatMessage[];
   nextChatId: number;
+  // 방장이 내보낸 사람의 토큰 (같은 토큰으로 다시 들어오거나 계속 조회하지 못하게)
+  kickedTokens: Set<string>;
 }
 
 // 실시간 대결 방. 상태는 메모리에만 있다 (PM2 fork 모드 1개 프로세스 전제, 재시작하면 사라짐).
@@ -149,6 +152,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       waiters: new Set(),
       chat: [],
       nextChatId: 1,
+      kickedTokens: new Set(),
     };
     this.rooms.set(code, room);
     return { code, playerId: host.id, token: host.token, state: this.buildState(room, host.id) };
@@ -299,8 +303,24 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     const now = Date.now();
     if (now - player.lastChatAt < CHAT_MIN_INTERVAL_MS) throw new ConflictException('조금 천천히 보내 주세요');
     player.lastChatAt = now;
-    room.chat.push({ id: room.nextChatId++, playerId: player.id, nickname: player.nickname, text, at: now });
-    if (room.chat.length > CHAT_HISTORY) room.chat.splice(0, room.chat.length - CHAT_HISTORY);
+    this.pushChat(room, player.id, player.nickname, text, now);
+    this.changed(room);
+    return this.buildState(room, player.id);
+  }
+
+  // 방장이 대기실에서 참가자를 내보낸다
+  kick(rawCode: string, token: string | undefined, targetId: string): RoomState {
+    const room = this.getRoom(rawCode);
+    const player = this.auth(room, token);
+    this.assertHost(room, player);
+    this.assertStatus(room, 'lobby', '대기실에서만 내보낼 수 있습니다');
+    if (targetId === player.id) throw new BadRequestException('자기 자신은 내보낼 수 없습니다');
+    const target = room.players.find((p) => p.id === targetId);
+    if (!target) throw new NotFoundException('참가자를 찾을 수 없습니다');
+
+    room.players = room.players.filter((p) => p.id !== target.id);
+    room.kickedTokens.add(target.token);
+    this.pushChat(room, ROOM_SYSTEM_PLAYER_ID, '', `${target.nickname}님이 방에서 내보내졌어요`, Date.now());
     this.changed(room);
     return this.buildState(room, player.id);
   }
@@ -484,6 +504,11 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
   }
 
   // 나가지 않았고 접속 중인 사람이 모두 제출했는지
+  private pushChat(room: Room, playerId: string, nickname: string, text: string, at: number) {
+    room.chat.push({ id: room.nextChatId++, playerId, nickname, text, at });
+    if (room.chat.length > CHAT_HISTORY) room.chat.splice(0, room.chat.length - CHAT_HISTORY);
+  }
+
   private allActiveSubmitted(room: Room): boolean {
     const active = room.players.filter((p) => !p.left && p.connected);
     return active.length > 0 && active.every((p) => p.submission !== null);
@@ -543,6 +568,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
   // X-Player-Token 으로 플레이어를 찾고 접속 시각을 갱신한다.
   // 게임 도중 나간 사람은 상태 조회/나가기만 할 수 있다 (allowLeft)
   private auth(room: Room, token: string | undefined, allowLeft = false): InternalPlayer {
+    if (token && room.kickedTokens.has(token)) throw new ForbiddenException('방장이 방에서 내보냈어요');
     const player = token ? room.players.find((p) => p.token === token) : undefined;
     if (!player) throw new ForbiddenException('이 방의 참가자가 아닙니다');
     if (player.left && !allowLeft) throw new ForbiddenException('이미 방을 나갔습니다');

@@ -86,7 +86,7 @@ export default function LobbyScreen({
   };
 
   return (
-    <div className="h-screen overflow-y-auto bg-gradient-to-b from-indigo-950 via-gray-900 to-gray-900 px-4 py-8">
+    <div className="h-dvh overflow-y-auto bg-gradient-to-b from-indigo-950 via-gray-900 to-gray-900 px-4 py-8">
       <form onSubmit={handleSubmit} className="mx-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-xl sm:p-8">
         <h1 className="text-center text-2xl font-bold text-gray-900">Where I Am</h1>
         <p className="mt-1 text-center text-sm text-gray-500">로드뷰를 보고 대한민국 어디인지 맞혀보세요</p>

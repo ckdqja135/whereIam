@@ -27,7 +27,7 @@ export default function ChallengeController({ id }: { id: string }) {
 
 function Spinner() {
   return (
-    <div className="flex h-screen items-center justify-center bg-gray-900">
+    <div className="flex h-dvh items-center justify-center bg-gray-900">
       <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-600 border-t-blue-500" />
     </div>
   );
@@ -117,7 +117,7 @@ function ChallengeGame({ id }: { id: string }) {
 
   if (screen === "notFound" || !challenge) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-900 px-4">
+      <div className="flex h-dvh items-center justify-center bg-gray-900 px-4">
         <div className="rounded-2xl bg-white p-8 text-center shadow-lg">
           <p className="text-lg font-bold text-gray-900">챌린지를 열 수 없어요</p>
           <p className="mt-2 text-sm text-gray-600">{loadError}</p>
@@ -207,7 +207,7 @@ function ChallengeGame({ id }: { id: string }) {
 
   // --- 도전장 랜딩 ---
   return (
-    <div className="h-screen overflow-y-auto bg-gradient-to-b from-indigo-950 via-[#241a46] to-gray-900 px-4 py-10 text-white">
+    <div className="h-dvh overflow-y-auto bg-gradient-to-b from-indigo-950 via-[#241a46] to-gray-900 px-4 py-10 text-white">
       <div className="mx-auto flex max-w-xl flex-col items-center">
         <h1 className="text-3xl font-extrabold italic tracking-tight sm:text-4xl">도전장이 도착했어요!</h1>
 

@@ -180,7 +180,7 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
 
   if (phase === "error") {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-900">
+      <div className="flex h-dvh items-center justify-center bg-gray-900">
         <div className="rounded-lg bg-white p-8 text-center shadow-lg">
           <p className="mb-4 text-lg font-bold text-red-600">오류 발생</p>
           <p className="mb-6 text-sm text-gray-600">{errorMsg}</p>
@@ -196,7 +196,7 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
   }
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden">
+    <div className="relative h-dvh w-screen overflow-hidden">
       {/* 로드뷰 레이어 */}
       <div className={`absolute inset-0 ${view === "roadview" ? "z-0" : "-z-10"}`}>
         <RoadviewPane

@@ -61,7 +61,7 @@ export default function ResultScreen({ profile, results, title = "게임 결과"
   }, [results, pinSrc]);
 
   return (
-    <div className="flex h-screen flex-col bg-gray-900 md:flex-row">
+    <div className="flex h-dvh flex-col bg-gray-900 md:flex-row">
       <div ref={mapContainerRef} className="h-[40vh] w-full shrink-0 md:h-full md:flex-1" />
 
       <div className="flex w-full flex-1 flex-col overflow-y-auto bg-white p-6 md:w-96 md:flex-none">

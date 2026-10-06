@@ -19,7 +19,7 @@ type Screen = "lobby" | "playing" | "finished";
 // 메인(혼자 하기): 로비 → 5라운드 → 결과 (+ 챌린지 링크 만들기)
 export default function GameController() {
   const hydrated = useHydrated();
-  if (!hydrated) return <div className="h-screen bg-gray-900" />;
+  if (!hydrated) return <div className="h-dvh bg-gray-900" />;
   return <HomeGame />;
 }
 

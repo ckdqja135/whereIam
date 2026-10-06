@@ -3,7 +3,7 @@ import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { CreateRoomDto, JoinRoomDto } from './dto/create-room.dto';
 import { RoomReadyDto, RoomSettingsDto, RoomStartDto } from './dto/lobby.dto';
-import { RoomAwayDto, RoomChatDto, RoomGuessDto, RoomPositionDto } from './dto/round.dto';
+import { RoomAwayDto, RoomChatDto, RoomGuessDto, RoomKickDto, RoomPositionDto } from './dto/round.dto';
 import type { RoomJoinResponse, RoomState } from './room.types';
 import { RoomsService } from './rooms.service';
 
@@ -85,6 +85,12 @@ export class RoomsController {
   @HttpCode(200)
   guess(@Param('code') code: string, @Headers(TOKEN_HEADER) token: string | undefined, @Body() dto: RoomGuessDto) {
     return this.rooms.guess(code, token, dto);
+  }
+
+  @Post(':code/kick')
+  @HttpCode(200)
+  kick(@Param('code') code: string, @Headers(TOKEN_HEADER) token: string | undefined, @Body() dto: RoomKickDto): RoomState {
+    return this.rooms.kick(code, token, dto.playerId);
   }
 
   @Post(':code/away')

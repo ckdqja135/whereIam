@@ -65,6 +65,7 @@ export interface RoomState {
 
 export interface RoomChatMessage {
   id: number;
+  // 시스템 안내(강퇴 등)는 ROOM_SYSTEM_PLAYER_ID
   playerId: string;
   nickname: string;
   text: string;
@@ -72,6 +73,7 @@ export interface RoomChatMessage {
 }
 
 export const ROOM_CHAT_MAX_LENGTH = 100;
+export const ROOM_SYSTEM_PLAYER_ID = 'system';
 
 // POST /rooms
 export interface CreateRoomRequest {
@@ -111,6 +113,10 @@ export interface RoomPositionRequest {
 // POST /rooms/:code/chat
 export interface RoomChatRequest {
   text: string;
+}
+// POST /rooms/:code/kick (방장, 대기실) — 참가자 내보내기
+export interface RoomKickRequest {
+  playerId: string;
 }
 // POST /rooms/:code/away — 라운드 진행 중 다른 탭/창으로 나갔을 때
 export interface RoomAwayRequest {

@@ -26,7 +26,7 @@ export default function RoomController({ code }: { code: string }) {
 
 function Spinner({ text }: { text?: string }) {
   return (
-    <div className="flex h-screen flex-col items-center justify-center gap-4 bg-gray-900">
+    <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-gray-900">
       <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-600 border-t-blue-500" />
       {text && <p className="text-sm text-white/70">{text}</p>}
     </div>
@@ -52,12 +52,14 @@ function RoomSession({ code, creds, onReset }: { code: string; creds: RoomCreden
   };
 
   if (fatal) {
+    const kicked = fatal.includes("내보냈");
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-900 px-4">
+      <div className="flex h-dvh items-center justify-center bg-gray-900 px-4">
         <div className="rounded-2xl bg-white p-8 text-center shadow-lg">
-          <p className="text-lg font-bold text-gray-900">대결 방에 들어갈 수 없어요</p>
+          <p className="text-lg font-bold text-gray-900">{kicked ? "방에서 나가게 됐어요" : "대결 방에 들어갈 수 없어요"}</p>
           <p className="mt-2 text-sm text-gray-600">{fatal}</p>
           <div className="mt-6 flex justify-center gap-3">
+            {!kicked && (
             <button
               onClick={() => {
                 clearRoomCredentials(code);
@@ -67,7 +69,10 @@ function RoomSession({ code, creds, onReset }: { code: string; creds: RoomCreden
             >
               다시 참가
             </button>
-            <Link href="/" className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+            )}
+            <Link
+              href="/"
+              onClick={() => clearRoomCredentials(code)} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700">
               메인으로
             </Link>
           </div>
@@ -152,7 +157,7 @@ function JoinScreen({ code, onJoined }: { code: string; onJoined: (c: RoomCreden
   };
 
   return (
-    <div className="h-screen overflow-y-auto bg-gradient-to-b from-indigo-950 via-[#241a46] to-gray-900 px-4 py-10 text-white">
+    <div className="h-dvh overflow-y-auto bg-gradient-to-b from-indigo-950 via-[#241a46] to-gray-900 px-4 py-10 text-white">
       <form onSubmit={submit} className="mx-auto flex max-w-xs flex-col items-center">
         <h1 className="text-3xl font-extrabold italic">대결 초대!</h1>
         <p className="mt-2 text-sm text-white/70">
