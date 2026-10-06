@@ -32,10 +32,15 @@ export interface RoomRoundPlayerResult {
   playerId: string;
   guess: Guess;
   distanceKm: number | null;
-  score: number; // 아이템 감점 반영
-  penalty: number;
+  score: number; // 아이템·자리 비움 감점 반영
+  penalty: number; // 힌트 아이템 감점
   items: ItemId[];
+  // 이번 라운드 자리 비움 감점 (구버전 서버에는 없을 수 있음)
+  awayPenalty?: number;
 }
+
+// 라운드 진행 중(제출 전) 다른 탭/창으로 나갈 때마다 그 라운드 점수에서 빠지는 점수
+export const ROOM_AWAY_PENALTY = 300;
 
 export interface RoomRoundResult {
   round: number; // 1부터
@@ -132,14 +137,14 @@ export interface RoomGuessRequest {
 }
 
 // ---------- 방해 아이템 (대결 + 아이템 모드, 라운드마다 3번) ----------
-export type RoomAttackType = 'ink' | 'freeze' | 'flip' | 'fog';
+export type RoomAttackType = 'ink' | 'freeze' | 'flip' | 'spin';
 
 // 효과 지속 시간(ms). 프론트 표시와 서버 기록이 같은 값을 쓴다
 export const ROOM_ATTACK_DURATION_MS: Record<RoomAttackType, number> = {
   ink: 6000,
   freeze: 5000,
   flip: 6000,
-  fog: 7000,
+  spin: 6000,
 };
 export const ROOM_ATTACK_TYPES = Object.keys(ROOM_ATTACK_DURATION_MS) as RoomAttackType[];
 export const ROOM_ATTACKS_PER_ROUND = 3;

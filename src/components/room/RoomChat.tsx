@@ -14,6 +14,27 @@ interface RoomChatProps {
   defaultOpen?: boolean;
 }
 
+const CHAT_POS_KEY = "whereiam:chatPos";
+
+function loadChatPos(): { left: number; top: number } | null {
+  try {
+    const raw = localStorage.getItem(CHAT_POS_KEY);
+    const v = raw ? (JSON.parse(raw) as { left?: unknown; top?: unknown }) : null;
+    return v && typeof v.left === "number" && typeof v.top === "number" ? { left: v.left, top: v.top } : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveChatPos(pos: { left: number; top: number } | null) {
+  try {
+    if (pos) localStorage.setItem(CHAT_POS_KEY, JSON.stringify(pos));
+    else localStorage.removeItem(CHAT_POS_KEY);
+  } catch {
+    // 저장 실패는 무시 (이번 접속 동안만 유지)
+  }
+}
+
 // "오후 02:24"
 function formatTime(at: number): string {
   const d = new Date(at);
@@ -52,10 +73,57 @@ export default function RoomChat({ code, token, state, onState, defaultOpen = fa
     () => defaultOpen && typeof window !== "undefined" && window.matchMedia("(min-width: 640px)").matches
   );
   const [readId, setReadId] = useState(lastId);
-  const [text, setText] = useState("");
+  // 입력창은 비제어(uncontrolled)로 둔다. 다른 사람 메시지 등으로 화면이 다시 그려질 때
+  // 한글 조합 중인 글자나 띄어쓰기가 사라지는 문제를 막기 위해서다. 버튼 활성화에만 hasText 를 쓴다.
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [hasText, setHasText] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  // ---------- PC: 상단 바를 끌어서 채팅창 옮기기 (위치 기억) ----------
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(() => loadChatPos());
+  const isDesktop = () => typeof window !== "undefined" && window.matchMedia("(min-width: 640px)").matches;
+
+  const clampPos = (left: number, top: number) => {
+    const el = panelRef.current;
+    const w = el?.offsetWidth ?? 384;
+    const h = el?.offsetHeight ?? 480;
+    return {
+      left: Math.min(Math.max(8, left), Math.max(8, window.innerWidth - w - 8)),
+      top: Math.min(Math.max(8, top), Math.max(8, window.innerHeight - h - 8)),
+    };
+  };
+
+  const startDrag = (e: React.PointerEvent) => {
+    if (!isDesktop() || !panelRef.current) return;
+    if ((e.target as HTMLElement).closest("button")) return; // 닫기 버튼은 그대로 클릭
+    e.preventDefault();
+    const rect = panelRef.current.getBoundingClientRect();
+    const dx = e.clientX - rect.left;
+    const dy = e.clientY - rect.top;
+    let latest = { left: rect.left, top: rect.top };
+    const move = (ev: PointerEvent) => {
+      latest = clampPos(ev.clientX - dx, ev.clientY - dy);
+      setPos(latest);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      saveChatPos(latest);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  // 창 크기가 바뀌어 화면 밖으로 나가면 안쪽으로 당겨온다
+  useEffect(() => {
+    if (!pos) return;
+    const onResize = () => setPos((p) => (p ? clampPos(p.left, p.top) : p));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [pos]);
 
   const rows = useMemo(() => toRows(messages, state.me), [messages, state.me]);
   const players = useMemo(() => new Map(state.players.map((p) => [p.id, p])), [state.players]);
@@ -77,13 +145,15 @@ export default function RoomChat({ code, token, state, onState, defaultOpen = fa
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
-    const body = text.trim();
+    const input = inputRef.current;
+    const body = input?.value.trim() ?? "";
     if (!body || sending) return;
     setSending(true);
     setError(null);
     try {
       onState(await roomActions.chat(code, token, { text: body }));
-      setText("");
+      if (input) input.value = "";
+      setHasText(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "보내지 못했어요.");
     } finally {
@@ -98,9 +168,22 @@ export default function RoomChat({ code, token, state, onState, defaultOpen = fa
     <div className="pointer-events-none fixed bottom-24 right-3 z-40 flex flex-col items-end gap-2 sm:right-4">
       {open && (
         // 모바일: 화면 전체를 덮는 채팅방 / 데스크톱: 오른쪽 아래 떠 있는 창
-        <div className="pointer-events-auto fixed inset-0 z-50 flex h-dvh w-full flex-col overflow-hidden bg-[#b2c7d9] sm:static sm:z-auto sm:h-[36rem] sm:max-h-[calc(100dvh-14rem)] sm:w-96 sm:rounded-2xl lg:h-[40rem] lg:w-[26rem] sm:shadow-2xl sm:ring-1 sm:ring-black/10">
-          {/* 상단 바 */}
-          <div className="flex items-center justify-between bg-[#a9bdce] px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div
+          ref={panelRef}
+          // PC 에서 옮긴 적이 있으면 그 위치에 고정 (모바일은 항상 전체 화면)
+          style={pos && isDesktop() ? { position: "fixed", left: pos.left, top: pos.top } : undefined}
+          className="pointer-events-auto fixed inset-0 z-50 flex h-dvh w-full flex-col overflow-hidden bg-[#b2c7d9] sm:static sm:z-auto sm:h-[36rem] sm:max-h-[calc(100dvh-14rem)] sm:w-96 sm:rounded-2xl lg:h-[40rem] lg:w-[26rem] sm:shadow-2xl sm:ring-1 sm:ring-black/10"
+        >
+          {/* 상단 바 (PC: 끌어서 이동, 더블클릭하면 원래 자리로) */}
+          <div
+            onPointerDown={startDrag}
+            onDoubleClick={() => {
+              setPos(null);
+              saveChatPos(null);
+            }}
+            title="끌어서 옮길 수 있어요 (더블클릭하면 원래 자리로)"
+            className="flex select-none items-center justify-between bg-[#a9bdce] px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:cursor-move"
+          >
             <div className="flex items-baseline gap-1.5">
               <p className="text-base font-bold text-gray-900">대결방 {code}</p>
               <span className="text-base text-gray-600">{memberCount}</span>
@@ -184,8 +267,12 @@ export default function RoomChat({ code, token, state, onState, defaultOpen = fa
           {/* 입력 */}
           <form onSubmit={send} className="flex items-center gap-2 bg-white px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
             <input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
+              ref={inputRef}
+              onInput={(e) => setHasText(e.currentTarget.value.trim().length > 0)}
+              onKeyDown={(e) => {
+                // 한글 조합 중 Enter 는 글자 확정용이므로 전송하지 않는다 (마지막 글자가 두 번 보내지는 문제 방지)
+                if (e.key === "Enter" && e.nativeEvent.isComposing) e.preventDefault();
+              }}
               maxLength={ROOM_CHAT_MAX_LENGTH}
               placeholder="메시지 입력"
               aria-label="채팅 메시지"
@@ -194,7 +281,7 @@ export default function RoomChat({ code, token, state, onState, defaultOpen = fa
             />
             <button
               type="submit"
-              disabled={sending || !text.trim()}
+              disabled={sending || !hasText}
               className="shrink-0 rounded-full bg-[#fee500] px-4 py-2 text-sm font-bold text-gray-900 hover:brightness-95 disabled:bg-gray-200 disabled:text-gray-400"
             >
               전송

@@ -22,6 +22,7 @@ import {
   ROOM_MAX_PLAYERS,
   ROOM_MIN_PLAYERS,
   ROOM_ATTACK_DURATION_MS,
+  ROOM_AWAY_PENALTY,
   ROOM_ATTACKS_PER_ROUND,
   ROOM_SYSTEM_PLAYER_ID,
   RoomAttack,
@@ -65,6 +66,8 @@ interface InternalPlayer {
   itemsUsed: number;
   // 라운드 진행 중 다른 탭/창으로 나간 횟수 (게임마다 초기화)
   awayCount: number;
+  // 이번 라운드에 나간 횟수 (라운드마다 초기화, 감점 계산용)
+  awayRound: number;
   lastChatAt: number;
   // 현재 라운드 제출 (라운드가 끝나면 미제출자는 { guess: null, items: [] } 로 채운다)
   submission: Submission | null;
@@ -299,6 +302,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     const player = this.auth(room, token);
     if (room.status !== 'playing' || dto.round !== room.round || player.submission) return;
     player.awayCount++;
+    player.awayRound++;
     this.changed(room);
   }
 
@@ -427,7 +431,10 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     room.status = 'playing';
     room.round = round;
     room.revealDeadline = null;
-    for (const p of room.players) p.submission = null;
+    for (const p of room.players) {
+      p.submission = null;
+      p.awayRound = 0;
+    }
     room.attacks = [];
 
     const { timeLimit } = room.settings;
@@ -452,14 +459,18 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       p.submission = submission;
       // 챌린지와 같은 계산식 (아이템 감점 반영, 0점 미만 없음)
       const [scored] = scoreGuesses([answer], [submission.guess], [submission.items]).rounds;
-      p.totalScore += scored.score;
+      // 자리 비움 감점 (제출 전 다른 탭/창으로 나간 횟수 × ROOM_AWAY_PENALTY, 0점 미만 없음)
+      const awayPenalty = p.awayRound * ROOM_AWAY_PENALTY;
+      const score = Math.max(0, scored.score - awayPenalty);
+      p.totalScore += score;
       return {
         playerId: p.id,
         guess: submission.guess,
         distanceKm: scored.distanceKm,
-        score: scored.score,
+        score,
         penalty: scored.penalty,
         items: submission.items,
+        awayPenalty,
       };
     });
     room.rounds.push({ round, answer: { ...answer }, results });
@@ -592,6 +603,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       totalScore: 0,
       itemsUsed: 0,
       awayCount: 0,
+      awayRound: 0,
       lastChatAt: 0,
       submission: null,
     };

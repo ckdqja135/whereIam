@@ -81,18 +81,16 @@ interface AttackEffectsProps {
   nicknameOf: (id: string) => string;
 }
 
-// 맞은 사람 화면 위에 덮는 효과 (먹물/안개/얼음). 뒤집기는 로드뷰 레이어에서 직접 처리한다.
+// 맞은 사람 화면 위에 덮는 효과 (먹물/얼음). 뒤집기·회전은 RoomRound 가 로드뷰·지도 레이어 전체에 직접 적용한다.
 export default function AttackEffects({ effects, serverNow, nicknameOf }: AttackEffectsProps) {
   if (effects.length === 0) return null;
   const freeze = effects.find((e) => e.type === "freeze");
-  const fog = effects.some((e) => e.type === "fog");
   const inks = effects.filter((e) => e.type === "ink");
   const latest = [...effects].sort((a, b) => b.at - a.at)[0];
 
   return (
     <>
-      {/* 먹물·안개: 화면(로드뷰/지도)만 가리고 버튼은 위에 남는다 */}
-      {fog && <div className="pointer-events-none absolute inset-0 z-[6] bg-white/30 backdrop-blur-md" aria-hidden />}
+      {/* 먹물: 화면(로드뷰/지도)만 가리고 버튼은 위에 남는다 */}
       {inks.map((ink) => {
         const left = ink.until - serverNow;
         return (

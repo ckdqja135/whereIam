@@ -40,9 +40,9 @@ WebSocket 대신 **롱 폴링**을 씁니다 (Vercel 서버 사이드 프록시�
 | POST | `/rooms/:code/rematch` | 같은 방에서 다시 하기 → 대기실 (방장, 게임 종료 후). 나간 사람은 정리 |
 | POST | `/rooms/:code/leave` | 나가기 (204). 대기실이면 제거, 게임 중이면 결과는 남기고 표시만. 방장이면 다음 사람에게 넘김 |
 | POST | `/rooms/:code/chat` | 채팅 `{ text }` (1~100자, 0.7초 간격 제한, 최근 50개 보관) |
-| POST | `/rooms/:code/away` | 라운드 중 다른 탭/창으로 나감 기록 `{ round }` (204, 제출 전에만 셈) |
+| POST | `/rooms/:code/away` | 라운드 중 다른 탭/창으로 나감 기록 `{ round }` (204, 제출 전에만 셈). 1회당 그 라운드 -300점 |
 | POST | `/rooms/:code/kick` | 방장이 참가자 내보내기 `{ playerId }` (대기실에서만) |
-| POST | `/rooms/:code/attack` | 방해 아이템 `{ round, targetId, type: ink/freeze/flip/fog }` (아이템 모드, 라운드마다 3번, 아직 제출 안 한 상대에게만) |
+| POST | `/rooms/:code/attack` | 방해 아이템 `{ round, targetId, type: ink/freeze/flip/spin }` (아이템 모드, 라운드마다 3번, 아직 제출 안 한 상대에게만) |
 
 - 진행 중에는 다른 사람의 추측이 응답에 절대 포함되지 않습니다 (제출 여부만). 점수는 라운드가 끝날 때 서버가 계산합니다.
 - 라운드 제한 시간에는 네트워크 지연을 고려해 2초 여유가 붙습니다 (`roundDeadline` 에 포함). 시간이 지나면 미제출자는 0점.

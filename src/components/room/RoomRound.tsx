@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { roomActions } from "@/lib/api";
-import { ROOM_ATTACKS_PER_ROUND, RoomAttackType, RoomState } from "@/lib/room-types";
+import { ROOM_ATTACKS_PER_ROUND, ROOM_AWAY_PENALTY, RoomAttackType, RoomState } from "@/lib/room-types";
 import { attackDef } from "@/lib/attacks";
 import { normalizeAvatar } from "@/lib/avatar";
 import { getAvatarPin } from "@/lib/avatar-pin";
@@ -98,8 +98,11 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
     [code, token, state.round]
   );
 
-  // 제출 전까지 다른 탭/창으로 나가면 서버에 기록 (단축키·우클릭 차단은 방 전체에서 RoomController 가 담당)
+  // 제출 전까지 다른 탭/창으로 나가면 서버에 기록하고, 이번 라운드 점수에서 감점된다
+  // (단축키·우클릭 차단은 방 전체에서 RoomController 가 담당)
+  const [awayThisRound, setAwayThisRound] = useState(0);
   useAwayDetector(!submitted, () => {
+    setAwayThisRound((n) => n + 1);
     roomActions.away(code, token, { round: state.round }).catch(() => {});
   });
 
@@ -118,6 +121,7 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
   const attacksSupported = itemMode && attacks !== undefined;
   const myEffects = (attacks ?? []).filter((a) => a.toId === state.me && a.until > serverNow);
   const flipped = myEffects.some((a) => a.type === "flip");
+  const spinning = myEffects.some((a) => a.type === "spin");
   const attacksLeft = ROOM_ATTACKS_PER_ROUND - (attacks ?? []).filter((a) => a.fromId === state.me).length;
   const attackTargets = activePlayers.filter((p) => p.id !== state.me && !p.submitted);
   // 모두에게 보여주는 최근 공격 알림 (4초)
@@ -141,38 +145,50 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
   const isUrgent = remaining !== null && remaining <= 10;
 
   return (
-    <div className="relative h-dvh w-screen overflow-hidden">
-      <div
-        className={`absolute inset-0 ${view === "roadview" ? "z-0" : "-z-10"}`}
-        style={{ transform: flipped ? "rotate(180deg)" : undefined, transition: "transform 400ms ease" }}
-      >
-        <RoadviewPane
-          ref={roadviewRef}
-          panoId={location.panoId}
-          lat={location.lat}
-          lng={location.lng}
-          isLoading={false}
-          allowMove={state.settings.allowMove}
-          allowPan={state.settings.allowPan}
-          allowZoom={state.settings.allowZoom}
-          onActualPosition={handleActualPosition}
-        />
+    <div className="relative h-dvh w-screen overflow-hidden bg-gray-900">
+      {/* 방해 효과 '회전'(빙글빙글)과 '뒤집기'(거꾸로)는 로드뷰·지도 어느 쪽을 보고 있어도 적용된다 */}
+      <div className="absolute inset-0" style={spinning ? { animation: "wia-spin 2.4s linear infinite" } : undefined}>
+        <div
+          className="absolute inset-0"
+          style={{ transform: flipped ? "rotate(180deg)" : undefined, transition: "transform 400ms ease" }}
+        >
+          <div className={`absolute inset-0 ${view === "roadview" ? "z-0" : "-z-10"}`}>
+            <RoadviewPane
+              ref={roadviewRef}
+              panoId={location.panoId}
+              lat={location.lat}
+              lng={location.lng}
+              isLoading={false}
+              allowMove={state.settings.allowMove}
+              allowPan={state.settings.allowPan}
+              allowZoom={state.settings.allowZoom}
+              onActualPosition={handleActualPosition}
+            />
+          </div>
+          <div className={`absolute inset-0 ${view === "map" ? "z-0" : "-z-10"}`}>
+            <MapPane
+              answerLat={location.lat}
+              answerLng={location.lng}
+              guessLat={guess?.lat ?? null}
+              guessLng={guess?.lng ?? null}
+              distanceFormatted={null}
+              isSubmitted={false}
+              pinSrc={pinSrc}
+              hintCircle={items.hints.circle}
+              onClickPosition={(lat, lng) => {
+                if (!submitted) setGuess({ lat, lng });
+              }}
+            />
+          </div>
+        </div>
       </div>
-      <div className={`absolute inset-0 ${view === "map" ? "z-0" : "-z-10"}`}>
-        <MapPane
-          answerLat={location.lat}
-          answerLng={location.lng}
-          guessLat={guess?.lat ?? null}
-          guessLng={guess?.lng ?? null}
-          distanceFormatted={null}
-          isSubmitted={false}
-          pinSrc={pinSrc}
-          hintCircle={items.hints.circle}
-          onClickPosition={(lat, lng) => {
-            if (!submitted) setGuess({ lat, lng });
-          }}
-        />
-      </div>
+
+      {/* 자리 비움 감점 안내 (본인에게만) */}
+      {awayThisRound > 0 && !submitted && (
+        <div className="pointer-events-none absolute bottom-24 left-1/2 z-20 -translate-x-1/2 rounded-full bg-amber-500 px-4 py-1.5 text-xs font-bold text-white shadow-lg">
+          ⚠️ 다른 탭/창으로 이동해서 이번 라운드 -{(awayThisRound * ROOM_AWAY_PENALTY).toLocaleString()}점
+        </div>
+      )}
 
       {/* 나에게 걸린 방해 효과 */}
       <AttackEffects effects={myEffects} serverNow={serverNow} nicknameOf={nicknameOf} />

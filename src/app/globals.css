@@ -20,3 +20,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* 대결 방해 아이템 '회전': 화면이 빙글빙글 돈다 */
+@keyframes wia-spin {
+  from {
+    transform: rotate(0deg) scale(0.9);
+  }
+  to {
+    transform: rotate(360deg) scale(0.9);
+  }
+}

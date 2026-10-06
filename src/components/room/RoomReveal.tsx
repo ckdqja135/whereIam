@@ -109,6 +109,9 @@ export default function RoomReveal({ code, token, state, clockOffset, onState }:
                         {r.items.map((id) => itemDef(id).emoji).join("")} -{r.penalty.toLocaleString()}
                       </span>
                     )}
+                    {(r.awayPenalty ?? 0) > 0 && (
+                      <span className="ml-1 text-amber-600">⚠️ 자리 비움 -{r.awayPenalty!.toLocaleString()}</span>
+                    )}
                   </p>
                 </div>
                 <div className="text-right">
