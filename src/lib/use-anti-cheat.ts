@@ -24,7 +24,12 @@ export function useBlockDevtools(active: boolean) {
         e.stopPropagation();
       }
     };
-    const onContextMenu = (e: MouseEvent) => e.preventDefault();
+    // 입력창(채팅, 닉네임, 초대 링크 등)에서는 복사·붙여넣기 메뉴가 필요하므로 우클릭/길게 누르기를 허용한다
+    const onContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable='true']")) return;
+      e.preventDefault();
+    };
 
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("contextmenu", onContextMenu, true);
