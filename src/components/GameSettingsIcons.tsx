@@ -1,16 +1,24 @@
 import type { GameSettings } from "@/lib/game-settings";
-import { modeLabel, timeLimitLabel } from "@/lib/game-settings";
+import { isQuiz, modeLabel, timeLimitLabel } from "@/lib/game-settings";
+import { QUIZ_QUESTIONS, QUIZ_SECONDS } from "@/lib/quiz";
 
 // 챌린지/결과 화면에 표시하는 게임 설정 요약
 export default function GameSettingsIcons({ settings }: { settings: GameSettings }) {
-  const items = [
-    { icon: "🇰🇷", label: "대한민국", on: true },
-    { icon: settings.itemMode ? "🎁" : "🚫", label: modeLabel(settings), on: true },
-    { icon: "⏱️", label: timeLimitLabel(settings.timeLimit), on: true },
-    { icon: "🚶", label: settings.allowMove ? "이동 허용" : "이동 금지", on: settings.allowMove },
-    { icon: "↔️", label: settings.allowPan ? "회전 허용" : "회전 금지", on: settings.allowPan },
-    { icon: "🔍", label: settings.allowZoom ? "확대 허용" : "확대 금지", on: settings.allowZoom },
-  ];
+  const items = isQuiz(settings)
+    ? [
+        { icon: "🇰🇷", label: "대한민국", on: true },
+        { icon: "❓", label: "4지선다 퀴즈", on: true },
+        { icon: "⏱️", label: `문제당 ${QUIZ_SECONDS}초`, on: true },
+        { icon: "📝", label: `${QUIZ_QUESTIONS}문제`, on: true },
+      ]
+    : [
+        { icon: "🇰🇷", label: "대한민국", on: true },
+        { icon: settings.itemMode ? "🎁" : "🚫", label: modeLabel(settings), on: true },
+        { icon: "⏱️", label: timeLimitLabel(settings.timeLimit), on: true },
+        { icon: "🚶", label: settings.allowMove ? "이동 허용" : "이동 금지", on: settings.allowMove },
+        { icon: "↔️", label: settings.allowPan ? "회전 허용" : "회전 금지", on: settings.allowPan },
+        { icon: "🔍", label: settings.allowZoom ? "확대 허용" : "확대 금지", on: settings.allowZoom },
+      ];
   return (
     <ul className="flex flex-wrap justify-center gap-x-6 gap-y-3">
       {items.map((it) => (

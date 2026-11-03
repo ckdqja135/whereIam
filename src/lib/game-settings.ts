@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   allowPan: true,
   allowZoom: true,
   itemMode: false,
+  gameType: "classic",
 };
 
 export const TIME_LIMIT_OPTIONS = [
@@ -17,6 +18,8 @@ export const TIME_LIMIT_OPTIONS = [
   { value: 600, label: "10분" },
   { value: 0, label: "무제한" },
 ];
+
+export const isQuiz = (settings: GameSettings) => settings.gameType === "quiz";
 
 export function modeLabel(settings: GameSettings): string {
   return settings.itemMode ? "아이템 모드" : "노템 모드";
@@ -40,6 +43,7 @@ export function loadSettings(): GameSettings {
       allowPan: p.allowPan ?? true,
       allowZoom: p.allowZoom ?? true,
       itemMode: p.itemMode ?? false,
+      gameType: p.gameType === "quiz" ? "quiz" : "classic",
     };
   } catch {
     return DEFAULT_SETTINGS;

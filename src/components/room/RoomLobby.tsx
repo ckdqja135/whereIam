@@ -8,6 +8,8 @@ import type { GameSettings } from "@/lib/game-settings";
 import { normalizeAvatar } from "@/lib/avatar";
 import { getRandomRoadviewLocation } from "@/lib/random-location";
 import { ROUNDS_PER_GAME } from "@/lib/score";
+import { QUIZ_QUESTIONS } from "@/lib/quiz";
+import { generateQuiz } from "@/lib/quiz-generator";
 import AvatarPin from "../avatar/AvatarPin";
 import GameSettingsIcons from "../GameSettingsIcons";
 import SettingsEditor from "../SettingsEditor";
@@ -27,6 +29,8 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
   const isHost = state.hostId === state.me;
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState<number | null>(null);
+  const quiz = state.settings.gameType === "quiz";
+  const questionCount = quiz ? QUIZ_QUESTIONS : ROUNDS_PER_GAME;
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   // 내보내기 확인 중인 참가자 (한 번 더 눌러야 확정)
@@ -57,6 +61,12 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
     setError(null);
     setPreparing(0);
     try {
+      if (quiz) {
+        // 4지선다 퀴즈: 문제·보기·정답을 만들어 올린다 (정답은 서버가 숨겨 두었다가 공개)
+        const quizQuestions = await generateQuiz(QUIZ_QUESTIONS, (done) => setPreparing(done));
+        onState(await roomActions.start(code, token, { quiz: quizQuestions }));
+        return;
+      }
       const locations: ChallengeLocation[] = [];
       for (let i = 0; i < ROUNDS_PER_GAME; i++) {
         locations.push(await getRandomRoadviewLocation());
@@ -192,7 +202,7 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
               className="flex-1 rounded-lg bg-blue-600 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
             >
               {preparing !== null
-                ? `문제 준비 중... (${preparing}/${ROUNDS_PER_GAME})`
+                ? `문제 준비 중... (${preparing}/${questionCount})`
                 : players.length < ROOM_MIN_PLAYERS
                   ? "친구를 기다리는 중"
                   : !allReady

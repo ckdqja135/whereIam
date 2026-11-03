@@ -5,6 +5,7 @@ import { NICKNAME_MAX, Profile, validateNickname } from "@/lib/profile";
 import { randomAvatar } from "@/lib/avatar";
 import type { GameSettings } from "@/lib/game-settings";
 import { ROUNDS_PER_GAME } from "@/lib/score";
+import { QUIZ_QUESTIONS } from "@/lib/quiz";
 import AvatarCustomizer from "./avatar/AvatarCustomizer";
 import SettingsEditor from "./SettingsEditor";
 
@@ -121,7 +122,7 @@ export default function LobbyScreen({
           disabled={!sdkReady}
           className="mt-6 w-full rounded-lg bg-blue-600 py-3 font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
         >
-          {sdkReady ? `${settings.itemMode ? "아이템" : "노템"} 모드로 시작 (${ROUNDS_PER_GAME}라운드)` : sdkError ? "카카오맵을 불러오지 못했어요" : "카카오맵 불러오는 중..."}
+          {sdkReady ? (settings.gameType === "quiz" ? `퀴즈 시작 (${QUIZ_QUESTIONS}문제)` : `${settings.itemMode ? "아이템" : "노템"} 모드로 시작 (${ROUNDS_PER_GAME}라운드)`) : sdkError ? "카카오맵을 불러오지 못했어요" : "카카오맵 불러오는 중..."}
         </button>
         {sdkError && <p className="mt-2 text-center text-xs text-red-600">{sdkError}</p>}
 
@@ -129,7 +130,7 @@ export default function LobbyScreen({
         {roomsAvailable && (
           <div className="mt-6 rounded-xl border border-indigo-100 bg-indigo-50 p-4">
             <p className="text-sm font-semibold text-indigo-900">👥 친구와 실시간 대결 (2~4인)</p>
-            <p className="mt-1 text-xs text-indigo-700">같은 5문제를 같은 설정으로 동시에 풀어요. 위 설정이 방 설정이 돼요.</p>
+            <p className="mt-1 text-xs text-indigo-700">같은 문제를 같은 설정으로 동시에 풀어요. 위에서 고른 게임 종류와 설정이 방 설정이 돼요.</p>
             <button
               type="button"
               onClick={createRoom}

@@ -6,6 +6,7 @@ import { roomActions } from "@/lib/api";
 import type { RoomState } from "@/lib/room-types";
 import { normalizeAvatar } from "@/lib/avatar";
 import { MAX_SCORE } from "@/lib/score";
+import { QUIZ_MAX_TOTAL } from "@/lib/quiz";
 import AvatarPin from "../avatar/AvatarPin";
 
 interface RoomFinishedProps {
@@ -23,7 +24,7 @@ export default function RoomFinished({ code, token, state, onState, onLeave }: R
   const isHost = state.hostId === state.me;
   const [busy, setBusy] = useState(false);
   const ranked = [...state.players].sort((a, b) => b.totalScore - a.totalScore);
-  const maxTotal = MAX_SCORE * state.totalRounds;
+  const maxTotal = state.settings.gameType === "quiz" ? QUIZ_MAX_TOTAL : MAX_SCORE * state.totalRounds;
 
   const rematch = async () => {
     setBusy(true);
@@ -60,7 +61,7 @@ export default function RoomFinished({ code, token, state, onState, onLeave }: R
                   )}
                 </p>
                 <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                  <div className="h-full rounded-full bg-blue-400" style={{ width: `${(p.totalScore / maxTotal) * 100}%` }} />
+                  <div className="h-full rounded-full bg-blue-400" style={{ width: `${Math.min(100, (p.totalScore / maxTotal) * 100)}%` }} />
                 </div>
               </div>
               <span className="text-lg font-bold tabular-nums">{p.totalScore.toLocaleString()}</span>

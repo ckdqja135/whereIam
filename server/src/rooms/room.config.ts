@@ -5,6 +5,7 @@ import type { ConfigService } from '@nestjs/config';
 export interface RoomTimings {
   longPollMs: number; // 롱 폴링 최대 대기 (ROOM_LONGPOLL_MS)
   revealMs: number; // 라운드 결과 공개 후 다음 라운드로 자동 진행까지 (ROOM_REVEAL_MS)
+  quizRevealMs: number; // 퀴즈: 문제 결과 공개 후 다음 문제로 자동 진행까지 (ROOM_QUIZ_REVEAL_MS)
   graceMs: number; // 라운드 제한 시간에 더해 주는 여유 (네트워크 지연 보정, ROOM_GRACE_MS)
   secondMs: number; // 제한 시간 1초의 길이. 테스트에서 60초 제한을 짧게 돌릴 때만 바꾼다 (ROOM_SECOND_MS)
   disconnectMs: number; // 마지막 요청 후 이 시간이 지나면 접속 끊김 (ROOM_DISCONNECT_MS)
@@ -17,6 +18,7 @@ export interface RoomTimings {
 const DEFAULTS: RoomTimings = {
   longPollMs: 25_000,
   revealMs: 20_000,
+  quizRevealMs: 3_000,
   graceMs: 2_000,
   secondMs: 1_000,
   disconnectMs: 40_000,
@@ -29,6 +31,7 @@ const DEFAULTS: RoomTimings = {
 const ENV_NAMES: Record<keyof RoomTimings, string> = {
   longPollMs: 'ROOM_LONGPOLL_MS',
   revealMs: 'ROOM_REVEAL_MS',
+  quizRevealMs: 'ROOM_QUIZ_REVEAL_MS',
   graceMs: 'ROOM_GRACE_MS',
   secondMs: 'ROOM_SECOND_MS',
   disconnectMs: 'ROOM_DISCONNECT_MS',

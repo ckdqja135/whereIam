@@ -1,6 +1,12 @@
 "use client";
 
-import { GameSettings, TIME_LIMIT_OPTIONS } from "@/lib/game-settings";
+import { GameSettings, isQuiz, TIME_LIMIT_OPTIONS } from "@/lib/game-settings";
+import { QUIZ_QUESTIONS, QUIZ_SECONDS } from "@/lib/quiz";
+
+const GAME_TYPES = [
+  { gameType: "classic" as const, emoji: "🗺️", title: "지도에 찍기", desc: "로드뷰를 보고 지도에서 위치 찾기" },
+  { gameType: "quiz" as const, emoji: "❓", title: "4지선다 퀴즈", desc: `${QUIZ_SECONDS}초 안에 지역 고르기` },
+];
 
 const MODES = [
   { itemMode: false, emoji: "🚫", title: "노템 모드", desc: "실력만으로 승부" },
@@ -19,7 +25,7 @@ interface SettingsEditorProps {
   disabled?: boolean;
 }
 
-// 모드 / 제한 시간 / 로드뷰 조작 허용. 혼자 하기 로비와 대결 대기실(방장)에서 같이 쓴다.
+// 게임 종류 / 모드 / 제한 시간 / 로드뷰 조작 허용. 혼자 하기 로비와 대결 대기실(방장)에서 같이 쓴다.
 export default function SettingsEditor({ settings, onChange, disabled }: SettingsEditorProps) {
   const set = (patch: Partial<GameSettings>) => onChange({ ...settings, ...patch });
   const chip = (active: boolean) =>
@@ -27,9 +33,68 @@ export default function SettingsEditor({ settings, onChange, disabled }: Setting
       active ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
     }`;
 
+  const quiz = isQuiz(settings);
+
   return (
     <div>
-      <p className="text-sm font-semibold text-gray-700">게임 모드</p>
+      <p className="text-sm font-semibold text-gray-700">게임 종류</p>
+      <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="게임 종류">
+        {GAME_TYPES.map((g) => {
+          const selected = (settings.gameType ?? "classic") === g.gameType;
+          return (
+            <button
+              key={g.gameType}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              disabled={disabled}
+              onClick={() => set({ gameType: g.gameType })}
+              className={`rounded-xl border-2 px-3 py-3 text-left transition-colors disabled:cursor-not-allowed ${
+                selected ? "border-indigo-500 bg-indigo-50" : "border-gray-200 bg-white hover:bg-gray-50"
+              }`}
+            >
+              <span className="text-xl">{g.emoji}</span>
+              <p className="mt-1 text-sm font-bold text-gray-900">{g.title}</p>
+              <p className="text-xs text-gray-500">{g.desc}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      {quiz ? (
+        <div className="mt-5 space-y-1.5 rounded-lg bg-indigo-50 px-3 py-2.5 text-xs leading-relaxed text-indigo-900">
+          <p>
+            ❓ 움직이지 않는 로드뷰를 보고 <b>{QUIZ_SECONDS}초 안에</b> 4개 중 지역을 골라요. 한 판 <b>{QUIZ_QUESTIONS}문제</b>.
+          </p>
+          <p>
+            ✅ 정답: <b>쉬움(시·도) +1,000 / 어려움(시·군·구) +1,500</b>, 빨리 맞힐수록 남은 1초당 +50
+          </p>
+          <p>
+            ❌ 오답·시간 초과: <b>-500</b> (총점은 0 아래로 안 내려가요)
+          </p>
+        </div>
+      ) : (
+        <ClassicSettings settings={settings} set={set} chip={chip} disabled={disabled} />
+      )}
+    </div>
+  );
+}
+
+// 지도에 찍기 전용 설정 (모드 / 제한 시간 / 로드뷰 조작)
+function ClassicSettings({
+  settings,
+  set,
+  chip,
+  disabled,
+}: {
+  settings: GameSettings;
+  set: (patch: Partial<GameSettings>) => void;
+  chip: (active: boolean) => string;
+  disabled?: boolean;
+}) {
+  return (
+    <div>
+      <p className="mt-5 text-sm font-semibold text-gray-700">게임 모드</p>
       <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="게임 모드">
         {MODES.map((m) => {
           const selected = (settings.itemMode ?? false) === m.itemMode;

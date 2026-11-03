@@ -12,6 +12,8 @@ interface RoomChatProps {
   state: RoomState;
   onState: (s: RoomState) => void;
   defaultOpen?: boolean;
+  // 화면 아래쪽을 다른 UI(퀴즈 보기 등)가 쓰고 있으면 채팅 버튼을 위로 올린다
+  raised?: boolean;
 }
 
 const CHAT_POS_KEY = "whereiam:chatPos";
@@ -65,7 +67,7 @@ function toRows(messages: RoomChatMessage[], me: string): ChatRow[] {
 }
 
 // 대결 방 채팅 (카카오톡 오픈채팅 스타일). 롱 폴링으로 받은 방 상태의 chat 을 그대로 보여준다.
-export default function RoomChat({ code, token, state, onState, defaultOpen = false }: RoomChatProps) {
+export default function RoomChat({ code, token, state, onState, defaultOpen = false, raised = false }: RoomChatProps) {
   const messages = useMemo(() => state.chat ?? [], [state.chat]);
   const lastId = messages.length > 0 ? messages[messages.length - 1].id : 0;
   // 모바일에서는 채팅이 화면 전체를 덮으므로 처음부터 열지 않는다
@@ -165,7 +167,11 @@ export default function RoomChat({ code, token, state, onState, defaultOpen = fa
   if (state.chat === undefined) return null;
 
   return (
-    <div className="pointer-events-none fixed bottom-24 right-3 z-40 flex flex-col items-end gap-2 sm:right-4">
+    <div
+      className={`pointer-events-none fixed right-3 z-40 flex flex-col items-end gap-2 sm:right-4 ${
+        raised ? "bottom-56 lg:bottom-24" : "bottom-24"
+      }`}
+    >
       {open && (
         // 모바일: 화면 전체를 덮는 채팅방 / 데스크톱: 오른쪽 아래 떠 있는 창
         <div

@@ -13,6 +13,8 @@ import LobbyScreen from "./LobbyScreen";
 import GameSession from "./GameSession";
 import ResultScreen from "./ResultScreen";
 import ChallengeShare from "./ChallengeShare";
+import QuizSoloSession, { QuizResult } from "./quiz/QuizSoloSession";
+import QuizResultScreen from "./quiz/QuizResultScreen";
 
 type Screen = "lobby" | "playing" | "finished";
 
@@ -31,16 +33,45 @@ function HomeGame() {
   const [profile, setProfile] = useState<Profile | null>(loadProfile);
   const [settings, setSettings] = useState<GameSettings>(loadSettings);
   const [results, setResults] = useState<RoundResult[]>([]);
+  const [quizResults, setQuizResults] = useState<{ results: QuizResult[]; total: number } | null>(null);
   // 같은 설정으로 다시 하기 시 GameSession을 새로 마운트하기 위한 키
   const [gameKey, setGameKey] = useState(0);
 
   const startGame = () => {
     setResults([]);
+    setQuizResults(null);
     setGameKey((k) => k + 1);
     setScreen("playing");
   };
 
-  if (screen === "playing" && profile) {
+  const quiz = settings.gameType === "quiz";
+
+  // 4지선다 퀴즈 (혼자)
+  if (quiz && screen === "playing" && profile && sdk.ready) {
+    return (
+      <QuizSoloSession
+        key={gameKey}
+        profile={profile}
+        onFinish={(r, total) => {
+          setQuizResults({ results: r, total });
+          setScreen("finished");
+        }}
+      />
+    );
+  }
+  if (quiz && screen === "finished" && profile && quizResults) {
+    return (
+      <QuizResultScreen
+        profile={profile}
+        results={quizResults.results}
+        total={quizResults.total}
+        onPlayAgain={startGame}
+        onGoLobby={() => setScreen("lobby")}
+      />
+    );
+  }
+
+  if (!quiz && screen === "playing" && profile) {
     return (
       <GameSession
         key={gameKey}
@@ -54,7 +85,7 @@ function HomeGame() {
     );
   }
 
-  if (screen === "finished" && profile) {
+  if (!quiz && screen === "finished" && profile) {
     return (
       <ResultScreen
         profile={profile}

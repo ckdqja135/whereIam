@@ -7,6 +7,17 @@
 
 import type { ChallengeLocation, GameSettings, Guess, ItemId, PlayerInfo } from "./api-types";
 
+// ---------- 4지선다 퀴즈 (gameType: "quiz") ----------
+export type QuizLevel = "easy" | "hard"; // easy: 시·도 보기 / hard: 시·군·구 보기
+
+// 방장 브라우저가 만들어 올리는 문제. answer 는 서버만 갖고 있다가 결과 공개 때 내려준다.
+export interface QuizQuestion {
+  location: ChallengeLocation;
+  choices: string[]; // 정확히 4개, 서로 다름, 각 1~40자
+  answer: number; // 0~3
+  level: QuizLevel;
+}
+
 export const ROOM_MAX_PLAYERS = 4;
 export const ROOM_MIN_PLAYERS = 2;
 
@@ -32,11 +43,14 @@ export interface RoomRoundPlayerResult {
   playerId: string;
   guess: Guess;
   distanceKm: number | null;
-  score: number; // 아이템·자리 비움 감점 반영
+  score: number; // 아이템·자리 비움 감점 반영. 퀴즈에서는 이번 문제 점수 변화(음수 가능)
   penalty: number; // 힌트 아이템 감점
   items: ItemId[];
   // 이번 라운드 자리 비움 감점 (구버전 서버에는 없을 수 있음)
   awayPenalty?: number;
+  // 퀴즈: 고른 보기 (안 고르면 null), 정답 여부
+  choice?: number | null;
+  correct?: boolean;
 }
 
 // 라운드 진행 중(제출 전) 다른 탭/창으로 나갈 때마다 그 라운드 점수에서 빠지는 점수
@@ -46,6 +60,8 @@ export interface RoomRoundResult {
   round: number; // 1부터
   answer: ChallengeLocation; // 보정된 정답 좌표
   results: RoomRoundPlayerResult[];
+  // 퀴즈: 보기와 정답 번호 (결과 공개 때만)
+  quiz?: { choices: string[]; answer: number; level: QuizLevel };
 }
 
 export interface RoomState {
@@ -68,6 +84,8 @@ export interface RoomState {
   chat?: RoomChatMessage[];
   // 현재 라운드에 쏜 방해 아이템 전체 (라운드가 바뀌면 비워짐). 구버전 서버에는 없을 수 있음
   attacks?: RoomAttack[];
+  // 퀴즈: playing/reveal 중 현재 문제의 보기 (정답 번호는 없음 → rounds 의 quiz 에서 공개). 그 외 null
+  quiz?: { choices: string[]; level: QuizLevel } | null;
 }
 
 export interface RoomChatMessage {
@@ -109,7 +127,13 @@ export interface RoomSettingsRequest {
 }
 // POST /rooms/:code/start (방장, lobby). 카카오 로드뷰 위치는 브라우저에서만 뽑을 수 있어 방장이 올린다.
 export interface RoomStartRequest {
-  locations: ChallengeLocation[]; // 정확히 5개
+  locations?: ChallengeLocation[]; // classic: 정확히 5개
+  quiz?: QuizQuestion[]; // quiz: 정확히 QUIZ_QUESTIONS 개
+}
+// POST /rooms/:code/answer — 퀴즈 보기 선택 (문제당 한 번)
+export interface RoomAnswerRequest {
+  round: number;
+  choice: number; // 0~3
 }
 // POST /rooms/:code/position — 로드뷰가 실제로 열린 파노라마 좌표 보고 (정답 보정용)
 export interface RoomPositionRequest {

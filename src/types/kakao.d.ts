@@ -176,8 +176,20 @@ declare namespace kakao.maps {
         options?: { location?: LatLng; radius?: number; sort?: SortBy }
       ): void;
     }
+    interface RegionCodeResult {
+      region_type: "H" | "B"; // H: 행정동, B: 법정동
+      address_name: string;
+      region_1depth_name: string; // 시·도
+      region_2depth_name: string; // 시·군·구 (예: "성남시 분당구", 세종은 빈 문자열)
+      region_3depth_name: string;
+    }
     class Geocoder {
       constructor();
+      coord2RegionCode(
+        lng: number,
+        lat: number,
+        callback: (result: RegionCodeResult[], status: Status) => void
+      ): void;
       coord2Address(
         lng: number,
         lat: number,

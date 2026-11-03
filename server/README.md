@@ -32,23 +32,38 @@ WebSocket 대신 **롱 폴링**을 씁니다 (Vercel 서버 사이드 프록시�
 | POST | `/rooms/:code/join` | 참가 `{ player }` → `201 { code, playerId, token, state }`. 없는 방 404, 시작된 방/4명 가득 409 |
 | GET | `/rooms/:code/state?since=<version>` | 방 상태. `since` 가 없거나 현재 version 과 다르면 즉시, 같으면 바뀔 때까지(최대 25초) 기다렸다 응답 |
 | POST | `/rooms/:code/ready` | `{ ready }` 준비 토글 (대기실) |
-| POST | `/rooms/:code/settings` | `{ settings }` 설정 변경 (방장, 대기실). 참가자 준비 상태 초기화 |
-| POST | `/rooms/:code/start` | `{ locations: [5개] }` 게임 시작 (방장, 2명 이상 접속, 참가자 모두 준비) |
+| POST | `/rooms/:code/settings` | `{ settings }` 설정 변경 (방장, 대기실). 참가자 준비 상태 초기화. `settings.gameType` 으로 classic/quiz 전환 |
+| POST | `/rooms/:code/start` | 게임 시작 (방장, 2명 이상 접속, 참가자 모두 준비). classic: `{ locations: [5개] }` / quiz: `{ quiz: [10개] }` (각 `{ location, choices: [4개], answer: 0~3, level: easy/hard }`) |
 | POST | `/rooms/:code/position` | `{ round, lat, lng }` 실제 로드뷰 좌표 보고 → 1km 이내면 그 라운드 정답 보정 (204) |
-| POST | `/rooms/:code/guess` | `{ round, guess, items }` 라운드 제출. 남은 사람이 모두 제출하면 라운드 종료 |
-| POST | `/rooms/:code/next` | 다음 라운드 / 마지막이면 종료 (방장, 결과 공개 중). 20초 뒤에는 자동 진행 |
+| POST | `/rooms/:code/guess` | `{ round, guess, items }` 라운드 제출 (classic 전용, quiz 면 409). 남은 사람이 모두 제출하면 라운드 종료 |
+| POST | `/rooms/:code/answer` | `{ round, choice: 0~3 }` 퀴즈 보기 선택 (quiz 전용, 문제당 한 번, 바꿀 수 없음). 남은 사람이 모두 고르면 문제 종료 |
+| POST | `/rooms/:code/next` | 다음 라운드 / 마지막이면 종료 (방장, 결과 공개 중). 20초(퀴즈는 3초) 뒤에는 자동 진행 |
 | POST | `/rooms/:code/rematch` | 같은 방에서 다시 하기 → 대기실 (방장, 게임 종료 후). 나간 사람은 정리 |
 | POST | `/rooms/:code/leave` | 나가기 (204). 대기실이면 제거, 게임 중이면 결과는 남기고 표시만. 방장이면 다음 사람에게 넘김 |
 | POST | `/rooms/:code/chat` | 채팅 `{ text }` (1~100자, 0.7초 간격 제한, 최근 50개 보관) |
 | POST | `/rooms/:code/away` | 라운드 중 다른 탭/창으로 나감 기록 `{ round }` (204, 제출 전에만 셈). 1회당 그 라운드 -300점 |
 | POST | `/rooms/:code/kick` | 방장이 참가자 내보내기 `{ playerId }` (대기실에서만) |
-| POST | `/rooms/:code/attack` | 방해 아이템 `{ round, targetId, type: ink/freeze/flip/spin }` (아이템 모드, 라운드마다 3번, 아직 제출 안 한 상대에게만) |
+| POST | `/rooms/:code/attack` | 방해 아이템 `{ round, targetId, type: ink/freeze/flip/spin }` (classic 아이템 모드, 라운드마다 3번, 아직 제출 안 한 상대에게만. quiz 면 400) |
 
 - 진행 중에는 다른 사람의 추측이 응답에 절대 포함되지 않습니다 (제출 여부만). 점수는 라운드가 끝날 때 서버가 계산합니다.
 - 라운드 제한 시간에는 네트워크 지연을 고려해 2초 여유가 붙습니다 (`roundDeadline` 에 포함). 시간이 지나면 미제출자는 0점.
 - 40초 동안 요청이 없으면 접속 끊김으로 봅니다(롱 폴링 대기 중에는 접속 중). 대기실에서 60초 끊기면 내보내고,
   게임 중 방장이 끊기면 접속 중인 사람에게 방장을 넘깁니다. 아무도 접속하지 않은 방은 5분, 끝난 방은 30분 뒤 삭제됩니다.
 - 동시에 존재하는 방은 최대 500개입니다 (초과 시 503).
+
+#### 4지선다 퀴즈 (`settings.gameType: "quiz"`)
+
+규칙 상수와 점수 계산은 `src/rooms/quiz.ts` 에 있고, 프론트의 `src/lib/quiz.ts` 와 항상 같게 유지해야 합니다.
+
+- 방장 브라우저가 카카오 주소 변환으로 문제 10개를 만들어 `start` 로 올립니다. 보기는 앞뒤 공백 제거 후 1~40자, 4개 모두 달라야 합니다.
+  정답 번호(`answer`)는 서버만 갖고 있다가 그 문제의 결과 공개 때 `rounds[].quiz` 로 내려줍니다.
+- 진행 중 상태의 `quiz` 에는 현재 문제의 보기(`choices`, `level`)만 있고, 다른 사람이 고른 보기는 제출 여부(`submitted`)만 보입니다.
+- 문제마다 15초 (설정의 `timeLimit` 은 무시, `roundDeadline` 에 2초 여유 포함). 라운드 수(`totalRounds`)는 10입니다.
+- 정답: 기본 점수(쉬움 1000 / 어려움 1500) + 남은 초 × 50 (0~15, 올림 — 화면 타이머 표시와 같은 초). 남은 초는 서버가 문제를 낸 시각과 고른 시각으로 계산합니다.
+  오답·시간 초과는 -500. 자리 비움 감점(1회 -300)도 그대로 적용되고, 총점은 0 아래로 내려가지 않습니다.
+  결과의 `score` 는 이번 문제의 점수 변화(음수 가능)이며 `choice`(안 고르면 null), `correct` 가 함께 옵니다.
+- 결과 공개는 3초(`ROOM_QUIZ_REVEAL_MS`) 뒤 다음 문제로 자동 진행됩니다. 힌트/방해 아이템은 쓸 수 없습니다.
+- 챌린지(`/challenges`)는 classic 만 지원합니다. `settings.gameType` 을 보내도 저장하지 않습니다.
 
 > **방 상태는 메모리에만 있습니다.** 서버를 재시작(`pm2 reload`/`restart`, 배포)하면 진행 중인 방이 모두 사라집니다.
 > 업데이트는 게임이 진행 중이지 않을 때 하세요. 같은 이유로 PM2 는 반드시 fork 모드 1개로 실행해야 합니다.
@@ -69,7 +84,7 @@ Rate limit: IP당 전체 60회/분(API별), 챌린지 생성·결과 제출·방
 | `PROXY_SECRET` | (없음) | 프론트 프록시 전용 공유 비밀키. 설정하면 `/health` 외 모든 요청에 `X-Proxy-Secret` 헤더가 일치해야 한다 (프록시 방식에서 사용) |
 
 테스트용으로만 방 타이밍을 줄일 수 있습니다 (모두 ms, 운영에서는 설정하지 말 것):
-`ROOM_LONGPOLL_MS`(25000), `ROOM_REVEAL_MS`(20000), `ROOM_GRACE_MS`(2000), `ROOM_SECOND_MS`(제한 시간 1초의 길이, 1000),
+`ROOM_LONGPOLL_MS`(25000), `ROOM_REVEAL_MS`(20000), `ROOM_QUIZ_REVEAL_MS`(퀴즈 결과 공개 시간, 3000), `ROOM_GRACE_MS`(2000), `ROOM_SECOND_MS`(제한 시간 1초의 길이, 1000),
 `ROOM_DISCONNECT_MS`(40000), `ROOM_LOBBY_KICK_MS`(60000), `ROOM_IDLE_MS`(300000), `ROOM_FINISHED_TTL_MS`(1800000), `ROOM_SWEEP_MS`(5000).
 
 ## 로컬 개발

@@ -3,7 +3,15 @@ import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { CreateRoomDto, JoinRoomDto } from './dto/create-room.dto';
 import { RoomReadyDto, RoomSettingsDto, RoomStartDto } from './dto/lobby.dto';
-import { RoomAttackDto, RoomAwayDto, RoomChatDto, RoomGuessDto, RoomKickDto, RoomPositionDto } from './dto/round.dto';
+import {
+  RoomAnswerDto,
+  RoomAttackDto,
+  RoomAwayDto,
+  RoomChatDto,
+  RoomGuessDto,
+  RoomKickDto,
+  RoomPositionDto,
+} from './dto/round.dto';
 import type { RoomJoinResponse, RoomState } from './room.types';
 import { RoomsService } from './rooms.service';
 
@@ -85,6 +93,13 @@ export class RoomsController {
   @HttpCode(200)
   guess(@Param('code') code: string, @Headers(TOKEN_HEADER) token: string | undefined, @Body() dto: RoomGuessDto) {
     return this.rooms.guess(code, token, dto);
+  }
+
+  // 퀴즈: 보기 선택 (문제당 한 번)
+  @Post(':code/answer')
+  @HttpCode(200)
+  answer(@Param('code') code: string, @Headers(TOKEN_HEADER) token: string | undefined, @Body() dto: RoomAnswerDto): RoomState {
+    return this.rooms.answer(code, token, dto);
   }
 
   @Post(':code/attack')

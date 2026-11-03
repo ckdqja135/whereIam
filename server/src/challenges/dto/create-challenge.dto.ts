@@ -14,13 +14,14 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import type { Guess, ItemId } from '../challenge.types';
+import type { GameType, Guess, ItemId } from '../challenge.types';
 import { ROUNDS_PER_GAME } from '../score';
 import { IsGuessArray } from './guess.validator';
 import { IsItemsArray } from './items.validator';
 import { PlayerInfoDto } from './player.dto';
 
 export const TIME_LIMITS = [0, 60, 120, 300, 600];
+export const GAME_TYPES: GameType[] = ['classic', 'quiz'];
 
 export class GameSettingsDto {
   // 초 단위, 0 = 무제한
@@ -41,6 +42,11 @@ export class GameSettingsDto {
   @IsOptional()
   @IsBoolean()
   itemMode?: boolean;
+
+  // 게임 종류. 없으면 classic. 대결 방에서만 쓰고, 챌린지는 이 값을 저장하지 않는다 (classic 전용)
+  @IsOptional()
+  @IsIn(GAME_TYPES)
+  gameType?: GameType;
 }
 
 // 대한민국 범위 안의 로드뷰 위치

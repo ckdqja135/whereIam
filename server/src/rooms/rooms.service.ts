@@ -16,7 +16,8 @@ import { MAX_ITEMS_PER_GAME } from '../challenges/items';
 import { haversineKm, ROUNDS_PER_GAME, scoreGuesses } from '../challenges/score';
 import { CreateRoomDto, JoinRoomDto } from './dto/create-room.dto';
 import { RoomStartDto } from './dto/lobby.dto';
-import { RoomAttackDto, RoomAwayDto, RoomGuessDto, RoomPositionDto } from './dto/round.dto';
+import { RoomAnswerDto, RoomAttackDto, RoomAwayDto, RoomGuessDto, RoomPositionDto } from './dto/round.dto';
+import { applyQuizDelta, QUIZ_QUESTIONS, QUIZ_SECONDS, quizDelta } from './quiz';
 import { loadRoomTimings, RoomTimings } from './room.config';
 import {
   ROOM_MAX_PLAYERS,
@@ -25,6 +26,7 @@ import {
   ROOM_AWAY_PENALTY,
   ROOM_ATTACKS_PER_ROUND,
   ROOM_SYSTEM_PLAYER_ID,
+  QuizQuestion,
   RoomAttack,
   RoomChatMessage,
   RoomJoinResponse,
@@ -48,7 +50,13 @@ const CHAT_MIN_INTERVAL_MS = 700;
 interface Submission {
   guess: Guess;
   items: ItemId[];
+  // 퀴즈: 고른 보기와 고른 시각 (epoch ms). classic 이거나 안 골랐으면 null
+  choice: number | null;
+  answeredAt: number | null;
 }
+
+// 라운드가 끝날 때 미제출자에게 채우는 빈 제출
+const EMPTY_SUBMISSION: Readonly<Submission> = { guess: null, items: [], choice: null, answeredAt: null };
 
 interface InternalPlayer {
   id: string;
@@ -69,7 +77,7 @@ interface InternalPlayer {
   // 이번 라운드에 나간 횟수 (라운드마다 초기화, 감점 계산용)
   awayRound: number;
   lastChatAt: number;
-  // 현재 라운드 제출 (라운드가 끝나면 미제출자는 { guess: null, items: [] } 로 채운다)
+  // 현재 라운드 제출 (라운드가 끝나면 미제출자는 EMPTY_SUBMISSION 으로 채운다). 퀴즈에서는 보기 선택
   submission: Submission | null;
 }
 
@@ -81,8 +89,13 @@ interface Room {
   settings: GameSettings;
   players: InternalPlayer[]; // 들어온 순서
   round: number;
+  // 라운드별 위치. 퀴즈에서는 quiz[i].location 을 복사해 두고, 라운드 수도 이 길이로 정한다
   locations: ChallengeLocation[];
   corrected: boolean[]; // 라운드별 정답 좌표 보정 여부
+  // 퀴즈 문제 (classic 이면 빈 배열). answer 는 그 문제 결과 공개 전까지 절대 내보내지 않는다
+  quiz: QuizQuestion[];
+  // 퀴즈: 현재 문제를 낸 시각 (빨리 맞힌 보너스 계산용). classic 이면 null
+  questionStartedAt: number | null;
   rounds: RoomRoundResult[];
   roundDeadline: number | null;
   revealDeadline: number | null;
@@ -151,6 +164,8 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       round: 0,
       locations: [],
       corrected: [],
+      quiz: [],
+      questionStartedAt: null,
       rounds: [],
       roundDeadline: null,
       revealDeadline: null,
@@ -242,7 +257,26 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       throw new ConflictException('모든 참가자가 준비해야 시작할 수 있어요');
     }
 
-    room.locations = dto.locations.map(({ lat, lng, panoId }) => ({ lat, lng, panoId }));
+    if (isQuiz(room)) {
+      if (!dto.quiz || dto.quiz.length !== QUIZ_QUESTIONS) {
+        throw new BadRequestException(`퀴즈 문제가 ${QUIZ_QUESTIONS}개 필요합니다`);
+      }
+      // 보기 형식(4개, 1~40자, 중복 없음)과 정답 번호 범위는 DTO 에서 검사
+      room.quiz = dto.quiz.map((q) => ({
+        location: { lat: q.location.lat, lng: q.location.lng, panoId: q.location.panoId },
+        choices: q.choices.map((c) => c.trim()),
+        answer: q.answer,
+        level: q.level,
+      }));
+      // 위치/정답 보정 로직은 classic 과 같이 locations 를 쓴다
+      room.locations = room.quiz.map((q) => ({ ...q.location }));
+    } else {
+      if (!dto.locations || dto.locations.length !== ROUNDS_PER_GAME) {
+        throw new BadRequestException(`위치가 ${ROUNDS_PER_GAME}개 필요합니다`);
+      }
+      room.quiz = [];
+      room.locations = dto.locations.map(({ lat, lng, panoId }) => ({ lat, lng, panoId }));
+    }
     room.corrected = room.locations.map(() => false);
     room.rounds = [];
     room.finishedAt = null;
@@ -276,6 +310,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
   guess(rawCode: string, token: string | undefined, dto: RoomGuessDto): RoomState {
     const room = this.getRoom(rawCode);
     const player = this.auth(room, token);
+    if (isQuiz(room)) throw new ConflictException('퀴즈 모드에서는 보기를 골라 주세요');
     if (room.status !== 'playing') throw new ConflictException('진행 중인 라운드가 없습니다');
     if (dto.round !== room.round) throw new ConflictException('현재 라운드가 아닙니다');
     if (player.submission) throw new ConflictException('이미 제출했습니다');
@@ -289,8 +324,29 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException(`아이템은 게임당 최대 ${MAX_ITEMS_PER_GAME}개까지 쓸 수 있습니다`);
     }
 
-    player.submission = { guess: dto.guess ? { lat: dto.guess.lat, lng: dto.guess.lng } : null, items };
+    player.submission = {
+      guess: dto.guess ? { lat: dto.guess.lat, lng: dto.guess.lng } : null,
+      items,
+      choice: null,
+      answeredAt: null,
+    };
     player.itemsUsed += items.length;
+    this.changed(room);
+    if (this.allActiveSubmitted(room)) this.endRound(room);
+    return this.buildState(room, player.id);
+  }
+
+  // 퀴즈: 보기 선택 (문제당 한 번, 바꿀 수 없음). 고른 시각으로 빨리 맞힌 보너스를 계산한다
+  answer(rawCode: string, token: string | undefined, dto: RoomAnswerDto): RoomState {
+    const room = this.getRoom(rawCode);
+    const player = this.auth(room, token);
+    if (!isQuiz(room)) throw new ConflictException('퀴즈 모드에서만 보기를 고를 수 있습니다');
+    if (room.status !== 'playing') throw new ConflictException('진행 중인 문제가 없습니다');
+    if (dto.round !== room.round) throw new ConflictException('현재 문제가 아닙니다');
+    if (player.submission) throw new ConflictException('이미 답을 골랐습니다');
+
+    // 제출 여부(submitted)·모두 제출 시 종료는 classic 과 같은 submission 으로 처리
+    player.submission = { guess: null, items: [], choice: dto.choice, answeredAt: Date.now() };
     this.changed(room);
     if (this.allActiveSubmitted(room)) this.endRound(room);
     return this.buildState(room, player.id);
@@ -324,6 +380,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
   attack(rawCode: string, token: string | undefined, dto: RoomAttackDto): RoomState {
     const room = this.getRoom(rawCode);
     const player = this.auth(room, token);
+    if (isQuiz(room)) throw new BadRequestException('퀴즈 모드에서는 방해 아이템을 쓸 수 없습니다');
     if (!room.settings.itemMode) throw new BadRequestException('아이템 모드에서만 방해할 수 있습니다');
     if (room.status !== 'playing') throw new ConflictException('진행 중인 라운드가 없습니다');
     if (dto.round !== room.round) throw new ConflictException('현재 라운드가 아닙니다');
@@ -387,6 +444,8 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     room.round = 0;
     room.locations = [];
     room.corrected = [];
+    room.quiz = [];
+    room.questionStartedAt = null;
     room.rounds = [];
     room.roundDeadline = null;
     room.revealDeadline = null;
@@ -437,8 +496,15 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     }
     room.attacks = [];
 
-    const { timeLimit } = room.settings;
-    room.roundDeadline = timeLimit > 0 ? now + timeLimit * this.timings.secondMs + this.timings.graceMs : null;
+    if (isQuiz(room)) {
+      // 퀴즈는 설정의 제한 시간과 상관없이 문제마다 QUIZ_SECONDS 초
+      room.questionStartedAt = now;
+      room.roundDeadline = now + QUIZ_SECONDS * this.timings.secondMs + this.timings.graceMs;
+    } else {
+      const { timeLimit } = room.settings;
+      room.questionStartedAt = null;
+      room.roundDeadline = timeLimit > 0 ? now + timeLimit * this.timings.secondMs + this.timings.graceMs : null;
+    }
     if (room.roundDeadline !== null) {
       room.roundTimer = setTimeout(() => {
         // 오래된 타이머 방지: 같은 방, 같은 라운드가 아직 진행 중일 때만
@@ -454,8 +520,34 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     this.clearTimers(room);
     const round = room.round;
     const answer = room.locations[round - 1];
-    const results: RoomRoundPlayerResult[] = room.players.map((p) => {
-      const submission = p.submission ?? { guess: null, items: [] };
+    const quiz = isQuiz(room) ? room.quiz[round - 1] : undefined;
+    if (quiz) {
+      room.rounds.push({
+        round,
+        answer: { ...answer },
+        results: this.scoreQuizRound(room, quiz),
+        quiz: { choices: [...quiz.choices], answer: quiz.answer, level: quiz.level },
+      });
+    } else {
+      room.rounds.push({ round, answer: { ...answer }, results: this.scoreClassicRound(room, answer) });
+    }
+
+    const now = Date.now();
+    const revealMs = quiz ? this.timings.quizRevealMs : this.timings.revealMs;
+    room.status = 'reveal';
+    room.roundDeadline = null;
+    room.revealDeadline = now + revealMs;
+    room.revealTimer = setTimeout(() => {
+      if (this.rooms.get(room.code) !== room || room.status !== 'reveal' || room.round !== round) return;
+      this.advance(room);
+    }, revealMs);
+    this.changed(room);
+  }
+
+  // classic: 지도에 찍은 위치로 점수 (0점 미만 없음, 라운드 점수를 총점에 더함)
+  private scoreClassicRound(room: Room, answer: ChallengeLocation): RoomRoundPlayerResult[] {
+    return room.players.map((p) => {
+      const submission = p.submission ?? { ...EMPTY_SUBMISSION, items: [] };
       p.submission = submission;
       // 챌린지와 같은 계산식 (아이템 감점 반영, 0점 미만 없음)
       const [scored] = scoreGuesses([answer], [submission.guess], [submission.items]).rounds;
@@ -473,22 +565,43 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         awayPenalty,
       };
     });
-    room.rounds.push({ round, answer: { ...answer }, results });
+  }
 
-    const now = Date.now();
-    room.status = 'reveal';
-    room.roundDeadline = null;
-    room.revealDeadline = now + this.timings.revealMs;
-    room.revealTimer = setTimeout(() => {
-      if (this.rooms.get(room.code) !== room || room.status !== 'reveal' || room.round !== round) return;
-      this.advance(room);
-    }, this.timings.revealMs);
-    this.changed(room);
+  // quiz: 맞히면 기본 점수 + 남은 초 보너스, 틀리거나 시간 초과면 감점. 총점은 0 아래로 내려가지 않는다.
+  // score 에는 이번 문제 점수 변화(자리 비움 감점 포함, 음수 가능)를 그대로 담는다
+  private scoreQuizRound(room: Room, quiz: QuizQuestion): RoomRoundPlayerResult[] {
+    const secondMs = Math.max(1, this.timings.secondMs);
+    // 제한 시간이 끝나는 시각 (여유 시간 제외). 여유 시간 안에 고르면 남은 초는 0
+    const limitEnd = (room.questionStartedAt ?? Date.now()) + QUIZ_SECONDS * this.timings.secondMs;
+    return room.players.map((p) => {
+      const submission = p.submission ?? { ...EMPTY_SUBMISSION, items: [] };
+      p.submission = submission;
+      const correct = submission.choice === quiz.answer;
+      const remainingSec =
+        correct && submission.answeredAt !== null
+          ? Math.max(0, (limitEnd - submission.answeredAt) / secondMs) // quizDelta 가 올림 처리
+          : 0;
+      // 자리 비움 감점 (제출 전 다른 탭/창으로 나간 횟수 × ROOM_AWAY_PENALTY) 도 그대로 적용
+      const awayPenalty = p.awayRound * ROOM_AWAY_PENALTY;
+      const delta = quizDelta(correct, quiz.level, remainingSec) - awayPenalty;
+      p.totalScore = applyQuizDelta(p.totalScore, delta);
+      return {
+        playerId: p.id,
+        guess: null,
+        distanceKm: null,
+        score: delta,
+        penalty: 0,
+        items: [],
+        awayPenalty,
+        choice: submission.choice,
+        correct,
+      };
+    });
   }
 
   // 결과 공개 → 다음 라운드 또는 게임 종료
   private advance(room: Room) {
-    if (room.round < ROUNDS_PER_GAME) {
+    if (room.round < room.locations.length) {
       this.startRound(room, room.round + 1);
       return;
     }
@@ -677,6 +790,10 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
   // 요청한 플레이어 기준 상태. 진행 중에는 다른 사람의 추측을 절대 내보내지 않는다 (제출 여부만)
   private buildState(room: Room, me: string): RoomState {
     const showLocation = room.status === 'playing' || room.status === 'reveal';
+    // 퀴즈 보기는 현재 문제 것만 (정답 번호는 rounds 의 quiz 에서 결과 공개 때 내려간다)
+    const question = showLocation && isQuiz(room) ? room.quiz[room.round - 1] : undefined;
+    // 대기실에서는 아직 위치가 없으므로 게임 종류별 기본 라운드 수
+    const totalRounds = room.status === 'lobby' ? (isQuiz(room) ? QUIZ_QUESTIONS : ROUNDS_PER_GAME) : room.locations.length;
     return {
       code: room.code,
       version: room.version,
@@ -698,7 +815,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         awayCount: p.awayCount,
       })),
       round: room.round,
-      totalRounds: ROUNDS_PER_GAME,
+      totalRounds,
       location: showLocation ? { ...room.locations[room.round - 1] } : null,
       roundDeadline: room.roundDeadline,
       revealDeadline: room.revealDeadline,
@@ -706,11 +823,12 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       rounds: room.rounds,
       chat: room.chat,
       attacks: room.status === 'playing' ? room.attacks : [],
+      quiz: question ? { choices: [...question.choices], level: question.level } : null,
     };
   }
 }
 
-// DTO 인스턴스를 순수 객체로. itemMode 는 항상 boolean 으로 저장 (없으면 노템)
+// DTO 인스턴스를 순수 객체로. itemMode 는 항상 boolean (없으면 노템), gameType 은 항상 값이 있게 (없으면 classic) 저장
 function toSettings(s: GameSettings): GameSettings {
   return {
     timeLimit: s.timeLimit,
@@ -718,5 +836,10 @@ function toSettings(s: GameSettings): GameSettings {
     allowPan: s.allowPan,
     allowZoom: s.allowZoom,
     itemMode: s.itemMode ?? false,
+    gameType: s.gameType ?? 'classic',
   };
+}
+
+function isQuiz(room: Room): boolean {
+  return room.settings.gameType === 'quiz';
 }

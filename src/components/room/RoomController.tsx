@@ -14,6 +14,7 @@ import AvatarCustomizer from "../avatar/AvatarCustomizer";
 import RoomLobby from "./RoomLobby";
 import RoomRound from "./RoomRound";
 import RoomReveal from "./RoomReveal";
+import RoomQuiz from "./RoomQuiz";
 import RoomFinished from "./RoomFinished";
 import RoomChat from "./RoomChat";
 
@@ -90,6 +91,7 @@ function RoomSession({ code, creds, onReset }: { code: string; creds: RoomCreden
     </div>
   );
 
+  const quiz = state.settings.gameType === "quiz";
   let screen: React.ReactNode;
   if (state.status === "lobby") {
     screen = (
@@ -105,6 +107,9 @@ function RoomSession({ code, creds, onReset }: { code: string; creds: RoomCreden
         }}
       />
     );
+  } else if (quiz && (state.status === "playing" || state.status === "reveal")) {
+    // 4지선다 퀴즈: 문제와 정답 공개가 같은 화면 (라운드마다 새로 마운트)
+    screen = <RoomQuiz key={state.round} code={code} token={creds.token} state={state} clockOffset={clockOffset} onState={applyState} />;
   } else if (state.status === "playing") {
     screen = (
       <RoomRound key={state.round} code={code} token={creds.token} state={state} clockOffset={clockOffset} onState={applyState} />
@@ -122,7 +127,14 @@ function RoomSession({ code, creds, onReset }: { code: string; creds: RoomCreden
       {banner}
       {screen}
       {/* 채팅은 화면이 바뀌어도 유지 (대기실에서는 열린 채로 시작) */}
-      <RoomChat code={code} token={creds.token} state={state} onState={applyState} defaultOpen={state.status === "lobby"} />
+      <RoomChat
+        code={code}
+        token={creds.token}
+        state={state}
+        onState={applyState}
+        defaultOpen={state.status === "lobby"}
+        raised={quiz && (state.status === "playing" || state.status === "reveal")}
+      />
     </>
   );
 }

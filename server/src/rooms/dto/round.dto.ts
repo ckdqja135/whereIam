@@ -5,12 +5,16 @@ import type { Guess, ItemId } from '../../challenges/challenge.types';
 import { IsGuess } from '../../challenges/dto/guess.validator';
 import { ITEM_IDS, MAX_ITEMS_PER_GAME } from '../../challenges/items';
 import { ROUNDS_PER_GAME } from '../../challenges/score';
+import { QUIZ_CHOICES, QUIZ_QUESTIONS } from '../quiz';
+
+// 라운드 번호 상한: classic 5라운드, quiz 10문제 중 큰 쪽. 현재 라운드인지는 서비스에서 검사
+const ROOM_MAX_ROUNDS = Math.max(ROUNDS_PER_GAME, QUIZ_QUESTIONS);
 
 // POST /rooms/:code/position — 로드뷰가 실제로 열린 파노라마 좌표 보고 (정답 보정용)
 export class RoomPositionDto {
   @IsInt()
   @Min(1)
-  @Max(ROUNDS_PER_GAME)
+  @Max(ROOM_MAX_ROUNDS)
   round: number;
 
   @IsNumber({ allowNaN: false, allowInfinity: false })
@@ -28,7 +32,7 @@ export class RoomPositionDto {
 export class RoomGuessDto {
   @IsInt()
   @Min(1)
-  @Max(ROUNDS_PER_GAME)
+  @Max(ROOM_MAX_ROUNDS)
   round: number;
 
   // null(추측 안 함) 또는 { lat, lng }
@@ -44,11 +48,24 @@ export class RoomGuessDto {
   items: ItemId[];
 }
 
+// POST /rooms/:code/answer — 퀴즈 보기 선택 (문제당 한 번)
+export class RoomAnswerDto {
+  @IsInt()
+  @Min(1)
+  @Max(QUIZ_QUESTIONS)
+  round: number;
+
+  @IsInt()
+  @Min(0)
+  @Max(QUIZ_CHOICES - 1)
+  choice: number;
+}
+
 // POST /rooms/:code/away — 라운드 진행 중 다른 탭/창으로 나감
 export class RoomAwayDto {
   @IsInt()
   @Min(1)
-  @Max(ROUNDS_PER_GAME)
+  @Max(ROOM_MAX_ROUNDS)
   round: number;
 }
 
@@ -71,7 +88,7 @@ export class RoomKickDto {
 export class RoomAttackDto {
   @IsInt()
   @Min(1)
-  @Max(ROUNDS_PER_GAME)
+  @Max(ROOM_MAX_ROUNDS)
   round: number;
 
   @IsString()
