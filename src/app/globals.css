@@ -30,3 +30,11 @@ body {
     transform: rotate(360deg) scale(0.9);
   }
 }
+
+/* 퀴즈 로드뷰는 사진처럼: 이동 화살표·방위·도로명·확대 버튼을 숨긴다 (카카오 로드뷰 내부 요소 id 기준, 저작권 표시는 남김) */
+.wia-rv-bare [id^="_il_"],
+.wia-rv-bare [id^="_al_"],
+.wia-rv-bare [id^="_atl_"],
+.wia-rv-bare [id^="_box_util_"] {
+  display: none !important;
+}

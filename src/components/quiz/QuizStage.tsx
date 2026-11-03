@@ -63,8 +63,8 @@ export default function QuizStage({
 
   return (
     <div className="relative h-dvh w-screen overflow-hidden bg-gray-900">
-      {/* 이동·회전·확대를 모두 막은 로드뷰 = 스크린샷처럼 보인다 */}
-      <div className="absolute inset-0">
+      {/* 이동·회전·확대를 모두 막고 화살표·도로명도 숨긴 로드뷰 = 스크린샷처럼 보인다 */}
+      <div className="wia-rv-bare absolute inset-0">
         <RoadviewPane
           panoId={panoId}
           lat={PLACEHOLDER.lat}
