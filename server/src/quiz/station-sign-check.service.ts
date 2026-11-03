@@ -142,7 +142,11 @@ export class StationSignCheckService implements OnModuleInit, OnModuleDestroy {
   private getWorker(): Promise<Worker> {
     if (!this.worker) {
       mkdirSync(this.cachePath, { recursive: true });
-      const created = createWorker('kor', undefined, { cachePath: this.cachePath }).then(async (w) => {
+      const created = createWorker('kor', undefined, {
+        cachePath: this.cachePath,
+        // 엔진 내부 메시지를 숨기는 작업 스레드 (tesseract-quiet-worker.ts)
+        workerPath: join(__dirname, 'tesseract-quiet-worker.js'),
+      }).then(async (w) => {
         await w.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
         return w;
       });
