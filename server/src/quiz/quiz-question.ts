@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import type { ChallengeLocation } from '../challenges/challenge.types';
 import type { QuizLevel, QuizPublicQuestion } from '../rooms/room.types';
 
@@ -12,4 +13,21 @@ export interface QuizServerQuestion {
 // 좌표와 정답을 뺀 공개용 문제
 export function toPublicQuestion(q: QuizServerQuestion): QuizPublicQuestion {
   return { panoId: q.location.panoId, choices: [...q.choices], level: q.level };
+}
+
+// choices[0] 이 정답. 섞은 뒤 정답 번호를 기록한다
+export function withShuffledChoices(location: ChallengeLocation, choices: string[], level: QuizLevel): QuizServerQuestion {
+  const correct = choices[0];
+  const shuffled = shuffle(choices);
+  return { location, choices: shuffled, answer: shuffled.indexOf(correct), level };
+}
+
+// 정답 위치를 예측할 수 없게 crypto 난수로 섞는다 (Fisher–Yates, 새 배열)
+export function shuffle<T>(items: T[]): T[] {
+  const a = [...items];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }

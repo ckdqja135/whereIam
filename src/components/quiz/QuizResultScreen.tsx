@@ -1,11 +1,13 @@
 "use client";
 
 import type { Profile } from "@/lib/profile";
-import { QUIZ_LEVEL_LABEL, QUIZ_MAX_TOTAL } from "@/lib/quiz";
+import type { QuizKind } from "@/lib/quiz";
+import { QUIZ_TEXT, quizMaxTotal } from "@/lib/quiz";
 import AvatarPin from "../avatar/AvatarPin";
 import type { QuizResult } from "./QuizSoloSession";
 
 interface QuizResultScreenProps {
+  kind: QuizKind;
   profile: Profile;
   results: QuizResult[];
   total: number;
@@ -14,7 +16,7 @@ interface QuizResultScreenProps {
 }
 
 // 혼자 하기 퀴즈 결과
-export default function QuizResultScreen({ profile, results, total, onPlayAgain, onGoLobby }: QuizResultScreenProps) {
+export default function QuizResultScreen({ kind, profile, results, total, onPlayAgain, onGoLobby }: QuizResultScreenProps) {
   const correct = results.filter((r) => r.correct).length;
 
   return (
@@ -23,7 +25,7 @@ export default function QuizResultScreen({ profile, results, total, onPlayAgain,
         <div className="flex items-center gap-3">
           <AvatarPin avatar={profile.avatar} size={48} />
           <div>
-            <p className="text-sm text-gray-500">퀴즈 결과</p>
+            <p className="text-sm text-gray-500">{QUIZ_TEXT[kind].title} 결과</p>
             <p className="font-bold text-gray-900">{profile.nickname}</p>
           </div>
         </div>
@@ -34,7 +36,7 @@ export default function QuizResultScreen({ profile, results, total, onPlayAgain,
             {results.length}문제 중 <b className="text-gray-900">{correct}개</b> 정답
           </p>
           <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-gray-100">
-            <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.min(100, (total / QUIZ_MAX_TOTAL) * 100)}%` }} />
+            <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.min(100, (total / quizMaxTotal(kind)) * 100)}%` }} />
           </div>
         </div>
 
@@ -47,7 +49,7 @@ export default function QuizResultScreen({ profile, results, total, onPlayAgain,
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-gray-900">{r.question.choices[r.answer]}</p>
                 <p className="text-xs text-gray-500">
-                  {QUIZ_LEVEL_LABEL[r.question.level]}
+                  {QUIZ_TEXT[kind].levelLabel[r.question.level]}
                   {!r.correct && ` · ${r.choice === null ? "시간 초과" : `고른 답: ${r.question.choices[r.choice]}`}`}
                 </p>
               </div>

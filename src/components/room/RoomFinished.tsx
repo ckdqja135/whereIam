@@ -6,7 +6,7 @@ import { roomActions } from "@/lib/api";
 import type { RoomState } from "@/lib/room-types";
 import { normalizeAvatar } from "@/lib/avatar";
 import { MAX_SCORE } from "@/lib/score";
-import { QUIZ_MAX_TOTAL } from "@/lib/quiz";
+import { quizKindOf, quizMaxTotal } from "@/lib/quiz";
 import AvatarPin from "../avatar/AvatarPin";
 
 interface RoomFinishedProps {
@@ -24,7 +24,8 @@ export default function RoomFinished({ code, token, state, onState, onLeave }: R
   const isHost = state.hostId === state.me;
   const [busy, setBusy] = useState(false);
   const ranked = [...state.players].sort((a, b) => b.totalScore - a.totalScore);
-  const maxTotal = state.settings.gameType === "quiz" ? QUIZ_MAX_TOTAL : MAX_SCORE * state.totalRounds;
+  const quizKind = quizKindOf(state.settings.gameType);
+  const maxTotal = quizKind ? quizMaxTotal(quizKind) : MAX_SCORE * state.totalRounds;
 
   const rematch = async () => {
     setBusy(true);

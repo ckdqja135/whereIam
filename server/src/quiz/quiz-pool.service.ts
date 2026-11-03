@@ -4,10 +4,9 @@ import { randomInt } from 'node:crypto';
 import { haversineKm } from '../challenges/score';
 import { DatabaseService } from '../database/database.service';
 import { QUIZ_CHOICES, QUIZ_QUESTIONS } from '../rooms/quiz';
-import type { QuizLevel } from '../rooms/room.types';
 import type { QuizPoolAddResponse, QuizPoolItem, QuizPoolStats } from './quiz-api.types';
 import { KAKAO_TIMEOUT_MS, KakaoGeocoderService, QuizRegion } from './kakao-geocoder.service';
-import type { QuizServerQuestion } from './quiz-question';
+import { QuizServerQuestion, shuffle, withShuffledChoices } from './quiz-question';
 
 // 퀴즈를 내려면 풀에 이만큼은 모여 있어야 한다.
 // QUIZ_POOL_MINIMUM 으로 바꿀 수 있지만 테스트용이고, 한 판 문제 수(QUIZ_QUESTIONS)보다 작게는 못 한다
@@ -200,25 +199,4 @@ export class QuizPoolService {
 // 보기 이름. 어려움은 "경기도 성남시", 시·군·구가 없으면 시·도만
 function regionLabel(r: QuizRegion): string {
   return r.r2 ? `${r.r1} ${r.r2}` : r.r1;
-}
-
-// choices[0] 이 정답. 섞은 뒤 정답 번호를 기록한다
-function withShuffledChoices(
-  location: QuizServerQuestion['location'],
-  choices: string[],
-  level: QuizLevel,
-): QuizServerQuestion {
-  const correct = choices[0];
-  const shuffled = shuffle(choices);
-  return { location, choices: shuffled, answer: shuffled.indexOf(correct), level };
-}
-
-// 정답 위치를 예측할 수 없게 crypto 난수로 섞는다 (Fisher–Yates, 새 배열)
-function shuffle<T>(items: T[]): T[] {
-  const a = [...items];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = randomInt(i + 1);
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
 }

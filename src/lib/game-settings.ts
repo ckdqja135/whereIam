@@ -1,4 +1,4 @@
-import type { GameSettings } from "./api-types";
+import type { GameSettings, GameType } from "./api-types";
 
 export type { GameSettings };
 
@@ -19,7 +19,7 @@ export const TIME_LIMIT_OPTIONS = [
   { value: 0, label: "무제한" },
 ];
 
-export const isQuiz = (settings: GameSettings) => settings.gameType === "quiz";
+const GAME_TYPES: GameType[] = ["classic", "quiz", "station"];
 
 export function modeLabel(settings: GameSettings): string {
   return settings.itemMode ? "아이템 모드" : "노템 모드";
@@ -43,7 +43,7 @@ export function loadSettings(): GameSettings {
       allowPan: p.allowPan ?? true,
       allowZoom: p.allowZoom ?? true,
       itemMode: p.itemMode ?? false,
-      gameType: p.gameType === "quiz" ? "quiz" : "classic",
+      gameType: p.gameType && GAME_TYPES.includes(p.gameType) ? p.gameType : "classic",
     };
   } catch {
     return DEFAULT_SETTINGS;

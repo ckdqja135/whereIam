@@ -9,6 +9,7 @@ import { useHydrated } from "@/lib/use-hydrated";
 import { useKakaoSdk } from "@/lib/use-kakao-sdk";
 import { loadProfile, Profile, saveProfile } from "@/lib/profile";
 import { GameSettings, loadSettings, saveSettings } from "@/lib/game-settings";
+import { quizKindOf } from "@/lib/quiz";
 import type { RoundResult } from "@/lib/game";
 import LobbyScreen from "./LobbyScreen";
 import GameSession from "./GameSession";
@@ -49,13 +50,15 @@ function HomeGame() {
     setScreen("playing");
   };
 
-  const quiz = settings.gameType === "quiz";
+  const quizKind = quizKindOf(settings.gameType);
+  const quiz = quizKind !== null;
 
   // 4지선다 퀴즈 (혼자)
-  if (quiz && screen === "playing" && profile && sdk.ready) {
+  if (quizKind && screen === "playing" && profile && sdk.ready) {
     return (
       <QuizSoloSession
         key={gameKey}
+        kind={quizKind}
         profile={profile}
         onFinish={(r, total) => {
           setQuizResults({ results: r, total });
@@ -64,9 +67,10 @@ function HomeGame() {
       />
     );
   }
-  if (quiz && screen === "finished" && profile && quizResults) {
+  if (quizKind && screen === "finished" && profile && quizResults) {
     return (
       <QuizResultScreen
+        kind={quizKind}
         profile={profile}
         results={quizResults.results}
         total={quizResults.total}

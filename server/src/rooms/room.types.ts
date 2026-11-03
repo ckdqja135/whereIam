@@ -7,8 +7,8 @@
 
 import type { ChallengeLocation, GameSettings, Guess, ItemId, PlayerInfo } from '../challenges/challenge.types';
 
-// ---------- 4지선다 퀴즈 (gameType: 'quiz') ----------
-export type QuizLevel = 'easy' | 'hard'; // easy: 시·도 보기 / hard: 시·군·구 보기
+// ---------- 4지선다 퀴즈 (gameType: 'quiz' 지역 / 'station' 지하철역) ----------
+export type QuizLevel = 'easy' | 'hard'; // 지역: 시·도 / 시·군·구 보기, 지하철역: 같은 도시의 역 / 이웃 역 보기
 
 // 플레이어에게 보내는 문제. 좌표와 정답은 없다 (로드뷰는 panoId 만으로 연다).
 // 문제는 서버의 문제 풀에서 서버가 고르고, 정답은 서버만 안다.

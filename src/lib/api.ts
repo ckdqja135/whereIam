@@ -30,7 +30,13 @@ import type {
   QuizSoloAnswerRequest,
   QuizSoloAnswerResponse,
   QuizSoloStartResponse,
+  StationFlagRequest,
+  StationPoolAddRequest,
+  StationPoolAddResponse,
+  StationPoolStats,
+  StationTodoResponse,
 } from "./quiz-api-types";
+import type { QuizKind } from "./quiz";
 
 // 백엔드(server/, 자체 서버) 주소. Vercel 환경변수 NEXT_PUBLIC_API_URL 로 설정한다.
 // - "/api/backend" (권장): 같은 도메인의 프록시 라우트를 거쳐 Vercel 서버가 BACKEND_URL 로 대신 호출한다.
@@ -144,8 +150,28 @@ export function reportQuizPosition(body: QuizPoolReportRequest) {
   return request<void>("/quiz/pool/report", { method: "POST", body: JSON.stringify(body) });
 }
 
-export function startQuizSolo() {
-  return request<QuizSoloStartResponse>("/quiz/solo", { method: "POST", body: "{}" });
+// 지역 퀴즈는 kind 없이 보낸다 (kind 를 모르는 구버전 서버도 그대로 동작하도록)
+export function startQuizSolo(kind: QuizKind = "region") {
+  return request<QuizSoloStartResponse>("/quiz/solo", {
+    method: "POST",
+    body: JSON.stringify(kind === "region" ? {} : { kind }),
+  });
+}
+
+export function getStationPoolStats() {
+  return request<StationPoolStats>("/quiz/stations/stats");
+}
+
+export function getStationTodo(n: number) {
+  return request<StationTodoResponse>(`/quiz/stations/todo?n=${n}`);
+}
+
+export function addToStationPool(body: StationPoolAddRequest) {
+  return request<StationPoolAddResponse>("/quiz/stations/pool", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function flagStation(body: StationFlagRequest) {
+  return request<void>("/quiz/stations/flag", { method: "POST", body: JSON.stringify(body) });
 }
 
 export function answerQuizSolo(sessionId: string, body: QuizSoloAnswerRequest) {

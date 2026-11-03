@@ -8,8 +8,8 @@ import type { GameSettings } from "@/lib/game-settings";
 import { normalizeAvatar } from "@/lib/avatar";
 import { getRandomRoadviewLocation } from "@/lib/random-location";
 import { ROUNDS_PER_GAME } from "@/lib/score";
-import { QUIZ_QUESTIONS } from "@/lib/quiz";
-import { ensureQuizPoolReady } from "@/lib/quiz-pool";
+import { QUIZ_QUESTIONS, quizKindOf } from "@/lib/quiz";
+import { ensureQuizPoolReady, ensureStationPoolReady } from "@/lib/quiz-pool";
 import AvatarPin from "../avatar/AvatarPin";
 import GameSettingsIcons from "../GameSettingsIcons";
 import SettingsEditor from "../SettingsEditor";
@@ -29,7 +29,8 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
   const isHost = state.hostId === state.me;
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState<number | null>(null);
-  const quiz = state.settings.gameType === "quiz";
+  const quizKind = quizKindOf(state.settings.gameType);
+  const quiz = quizKind !== null;
   const [poolProgress, setPoolProgress] = useState<{ total: number; minimum: number } | null>(null);
   const questionCount = quiz ? QUIZ_QUESTIONS : ROUNDS_PER_GAME;
   const [error, setError] = useState<string | null>(null);
@@ -62,10 +63,11 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
     setError(null);
     setPreparing(0);
     try {
-      if (quiz) {
+      if (quizKind) {
         // 4지선다 퀴즈: 문제는 서버가 문제 풀에서 고른다 (방장도 문제·정답을 모른다).
         // 풀이 부족하면(배포 직후 등) 먼저 로드뷰를 모아 보탠다
-        await ensureQuizPoolReady((total, minimum) => setPoolProgress({ total, minimum }));
+        const ensure = quizKind === "station" ? ensureStationPoolReady : ensureQuizPoolReady;
+        await ensure((total, minimum) => setPoolProgress({ total, minimum }));
         setPoolProgress(null);
         onState(await roomActions.start(code, token, {}));
         return;

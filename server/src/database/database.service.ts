@@ -60,6 +60,33 @@ export class DatabaseService implements OnApplicationShutdown {
       );
 
       CREATE INDEX IF NOT EXISTS idx_quiz_pool_region ON quiz_pool (bad, r1, r2);
+
+      -- 지하철역 퀴즈. 역 목록은 서버가 카카오 장소 검색(지하철역 SW8)으로 모으고, 같은 이름의 가까운 역(환승역)은 하나로 합친다.
+      -- 역 바로 앞 로드뷰(pano_*)는 브라우저가 찾아서 보태고, 서버가 사진에서 역 이름 글자를 찾아 보이면 문제에서 뺀다
+      CREATE TABLE IF NOT EXISTS stations (
+        id              TEXT PRIMARY KEY,           -- 카카오 장소 id (합친 역은 id 가 가장 작은 것)
+        name            TEXT NOT NULL,              -- "강남역"
+        lines           TEXT NOT NULL,              -- "수도권2호선,신분당선"
+        city            TEXT NOT NULL,              -- 보기를 고르는 도시 묶음 (capital / busan / daegu / gwangju / daejeon / other)
+        lat             REAL NOT NULL,
+        lng             REAL NOT NULL,
+        pano_id         INTEGER UNIQUE,             -- 역 바로 앞 로드뷰, 아직 없으면 NULL
+        pano_lat        REAL,
+        pano_lng        REAL,
+        pano_cube       TEXT,                       -- 로드뷰 사진 경로 ("2026/06/9152477/2_103458_9152477_20260605061034")
+        pano_checked_at TEXT,                       -- 근처에 로드뷰가 없다고 확인한 시각 (다시 찾기 전 대기용)
+        checked         INTEGER NOT NULL DEFAULT 0, -- 1: 사진에서 역 이름을 찾아봤고 안 보임 (이것만 문제로 낸다)
+        bad             INTEGER NOT NULL DEFAULT 0, -- 0이 아니면 문제에서 뺌. 1: 보고된 좌표가 다름, 2: 사진에 역 이름이 보임, 3: 플레이어 신고
+        updated_at      TEXT NOT NULL               -- 역 목록에서 마지막으로 확인한 시각 (ISO)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_stations_pano ON stations (bad, pano_id);
+
+      -- 서버 내부 상태 (역 목록을 마지막으로 모은 시각 등)
+      CREATE TABLE IF NOT EXISTS app_meta (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
     `);
   }
 

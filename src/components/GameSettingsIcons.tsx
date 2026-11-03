@@ -1,14 +1,15 @@
 import type { GameSettings } from "@/lib/game-settings";
-import { isQuiz, modeLabel, timeLimitLabel } from "@/lib/game-settings";
-import { QUIZ_QUESTIONS, QUIZ_SECONDS } from "@/lib/quiz";
+import { modeLabel, timeLimitLabel } from "@/lib/game-settings";
+import { QUIZ_QUESTIONS, QUIZ_RULES, QUIZ_TEXT, quizKindOf } from "@/lib/quiz";
 
 // 챌린지/결과 화면에 표시하는 게임 설정 요약
 export default function GameSettingsIcons({ settings }: { settings: GameSettings }) {
-  const items = isQuiz(settings)
+  const quizKind = quizKindOf(settings.gameType);
+  const items = quizKind
     ? [
         { icon: "🇰🇷", label: "대한민국", on: true },
-        { icon: "❓", label: "4지선다 퀴즈", on: true },
-        { icon: "⏱️", label: `문제당 ${QUIZ_SECONDS}초`, on: true },
+        { icon: QUIZ_TEXT[quizKind].emoji, label: QUIZ_TEXT[quizKind].title, on: true },
+        { icon: "⏱️", label: `문제당 ${QUIZ_RULES[quizKind].seconds}초`, on: true },
         { icon: "📝", label: `${QUIZ_QUESTIONS}문제`, on: true },
       ]
     : [

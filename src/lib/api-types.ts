@@ -10,12 +10,12 @@ export interface GameSettings {
   allowZoom: boolean;
   // 아이템 모드. false(노템)면 힌트 아이템을 쓸 수 없다. 모드 도입 전 챌린지는 값이 없으며 노템으로 취급한다.
   itemMode?: boolean;
-  // 게임 종류. classic(지도에 찍기, 기본) / quiz(로드뷰 보고 4지선다). 값이 없으면 classic.
-  // 챌린지는 classic 만 지원한다 (quiz 값이 와도 챌린지에는 저장하지 않음).
+  // 게임 종류. classic(지도에 찍기, 기본) / quiz(로드뷰 보고 지역 4지선다) / station(지하철역 4지선다). 값이 없으면 classic.
+  // 챌린지는 classic 만 지원한다 (다른 값이 와도 챌린지에는 저장하지 않음).
   gameType?: GameType;
 }
 
-export type GameType = "classic" | "quiz";
+export type GameType = "classic" | "quiz" | "station";
 
 export interface ChallengeLocation {
   lat: number;

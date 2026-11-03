@@ -5,7 +5,7 @@ import { NICKNAME_MAX, Profile, validateNickname } from "@/lib/profile";
 import { randomAvatar } from "@/lib/avatar";
 import type { GameSettings } from "@/lib/game-settings";
 import { ROUNDS_PER_GAME } from "@/lib/score";
-import { QUIZ_QUESTIONS } from "@/lib/quiz";
+import { QUIZ_QUESTIONS, QUIZ_TEXT, quizKindOf } from "@/lib/quiz";
 import AvatarCustomizer from "./avatar/AvatarCustomizer";
 import SettingsEditor from "./SettingsEditor";
 
@@ -34,6 +34,7 @@ export default function LobbyScreen({
   const [nickname, setNickname] = useState(initialProfile?.nickname ?? "");
   const [avatar, setAvatar] = useState(() => initialProfile?.avatar ?? randomAvatar());
   const [settings, setSettings] = useState(initialSettings);
+  const quizKind = quizKindOf(settings.gameType);
   const [touched, setTouched] = useState(false);
   const [roomCode, setRoomCode] = useState("");
   const [roomBusy, setRoomBusy] = useState(false);
@@ -45,7 +46,7 @@ export default function LobbyScreen({
     e.preventDefault();
     setTouched(true);
     if (nicknameError || !sdkReady) return;
-    if (settings.gameType === "quiz" && !roomsAvailable) return;
+    if (quizKind && !roomsAvailable) return;
     onStart({ nickname: nickname.trim(), avatar }, settings);
   };
 
@@ -120,10 +121,10 @@ export default function LobbyScreen({
 
         <button
           type="submit"
-          disabled={!sdkReady || (settings.gameType === "quiz" && !roomsAvailable)}
+          disabled={!sdkReady || (quizKind !== null && !roomsAvailable)}
           className="mt-6 w-full rounded-lg bg-blue-600 py-3 font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
         >
-          {sdkReady ? (settings.gameType === "quiz" ? `퀴즈 시작 (${QUIZ_QUESTIONS}문제)` : `${settings.itemMode ? "아이템" : "노템"} 모드로 시작 (${ROUNDS_PER_GAME}라운드)`) : sdkError ? "카카오맵을 불러오지 못했어요" : "카카오맵 불러오는 중..."}
+          {sdkReady ? (quizKind ? `${QUIZ_TEXT[quizKind].title} 시작 (${QUIZ_QUESTIONS}문제)` : `${settings.itemMode ? "아이템" : "노템"} 모드로 시작 (${ROUNDS_PER_GAME}라운드)`) : sdkError ? "카카오맵을 불러오지 못했어요" : "카카오맵 불러오는 중..."}
         </button>
         {sdkError && <p className="mt-2 text-center text-xs text-red-600">{sdkError}</p>}
 

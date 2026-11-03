@@ -18,7 +18,41 @@ interface RegionDocument {
   region_2depth_name?: string;
 }
 
-// 카카오 REST API (coord2regioncode) 로 좌표 → 행정구역.
+// 지하철역 검색 결과 한 건 (카카오 장소 검색 SW8). 같은 역도 노선마다 따로 온다 ("강남역 2호선", "강남역 신분당선")
+export interface KakaoStationPlace {
+  id: string;
+  placeName: string; // "강남역 2호선"
+  category: string; // "교통,수송 > 지하철,전철 > 수도권2호선"
+  address: string; // "서울 강남구 역삼동 858"
+  lat: number;
+  lng: number;
+}
+
+// 검색 사각형 (경도·위도)
+export interface LngLatRect {
+  minLng: number;
+  minLat: number;
+  maxLng: number;
+  maxLat: number;
+}
+
+export interface KakaoStationPage {
+  places: KakaoStationPlace[];
+  totalCount: number; // 이 사각형 안의 전체 개수 (한 사각형에서 받을 수 있는 건 최대 45개)
+  isEnd: boolean;
+}
+
+interface PlaceDocument {
+  id?: string;
+  place_name?: string;
+  category_name?: string;
+  category_group_code?: string;
+  address_name?: string;
+  x?: string;
+  y?: string;
+}
+
+// 카카오 REST API 로 좌표 → 행정구역 (coord2regioncode), 사각형 안의 지하철역 검색 (category SW8).
 // 브라우저용 JavaScript 키가 아니라 서버 전용 REST API 키(KAKAO_REST_API_KEY)가 필요하다.
 @Injectable()
 export class KakaoGeocoderService {
@@ -31,7 +65,7 @@ export class KakaoGeocoderService {
     this.baseUrl = (config.get<string>('KAKAO_API_BASE')?.trim() || DEFAULT_KAKAO_API_BASE).replace(/\/+$/, '');
     if (!this.apiKey) {
       this.logger.warn(
-        'KAKAO_REST_API_KEY 가 비어 있어 퀴즈 문제 풀에 로드뷰를 보탤 수 없습니다 (POST /quiz/pool 은 503). ' +
+        'KAKAO_REST_API_KEY 가 비어 있어 퀴즈 문제 풀에 로드뷰를 보탤 수 없고 (POST /quiz/pool 은 503) 지하철역 목록도 모을 수 없습니다. ' +
           'Kakao Developers > 앱 키 > REST API 키를 .env 에 넣어 주세요.',
       );
     }
@@ -68,6 +102,58 @@ export class KakaoGeocoderService {
     } catch (err) {
       const name = err instanceof Error ? err.name : '';
       this.logger.warn(`카카오 coord2regioncode 요청 오류: ${name === 'TimeoutError' ? '시간 초과' : String(err)}`);
+      return null;
+    }
+  }
+
+  // 사각형 안의 지하철역 한 쪽 (15개씩, page 1~3). 오류·시간 초과면 null
+  async searchStations(rect: LngLatRect, page: number): Promise<KakaoStationPage | null> {
+    if (!this.enabled) return null;
+    const params = new URLSearchParams({
+      category_group_code: 'SW8',
+      rect: `${rect.minLng},${rect.minLat},${rect.maxLng},${rect.maxLat}`,
+      page: String(page),
+      size: '15',
+    });
+    try {
+      const res = await fetch(`${this.baseUrl}/v2/local/search/category.json?${params}`, {
+        headers: { Authorization: `KakaoAK ${this.apiKey}` },
+        signal: AbortSignal.timeout(KAKAO_TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        this.logger.warn(`카카오 지하철역 검색 실패: HTTP ${res.status}`);
+        return null;
+      }
+      const body = (await res.json()) as {
+        documents?: PlaceDocument[];
+        meta?: { total_count?: number; is_end?: boolean };
+      };
+      const docs = Array.isArray(body?.documents) ? body.documents : [];
+      const places: KakaoStationPlace[] = [];
+      for (const d of docs) {
+        const lat = Number(d?.y);
+        const lng = Number(d?.x);
+        if (typeof d?.id !== 'string' || typeof d.place_name !== 'string' || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+          continue;
+        }
+        places.push({
+          id: d.id,
+          placeName: d.place_name.trim(),
+          category: typeof d.category_name === 'string' ? d.category_name : '',
+          address: typeof d.address_name === 'string' ? d.address_name : '',
+          lat,
+          lng,
+        });
+      }
+      const totalCount = Number(body?.meta?.total_count);
+      return {
+        places,
+        totalCount: Number.isFinite(totalCount) ? totalCount : places.length,
+        isEnd: body?.meta?.is_end !== false,
+      };
+    } catch (err) {
+      const name = err instanceof Error ? err.name : '';
+      this.logger.warn(`카카오 지하철역 검색 요청 오류: ${name === 'TimeoutError' ? '시간 초과' : String(err)}`);
       return null;
     }
   }

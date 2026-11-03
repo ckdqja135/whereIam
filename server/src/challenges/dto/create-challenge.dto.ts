@@ -21,7 +21,7 @@ import { IsItemsArray } from './items.validator';
 import { PlayerInfoDto } from './player.dto';
 
 export const TIME_LIMITS = [0, 60, 120, 300, 600];
-export const GAME_TYPES: GameType[] = ['classic', 'quiz'];
+export const GAME_TYPES: GameType[] = ['classic', 'quiz', 'station'];
 
 export class GameSettingsDto {
   // 초 단위, 0 = 무제한

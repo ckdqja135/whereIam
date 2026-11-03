@@ -1,8 +1,10 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { generateId } from '../challenges/id';
+import type { QuizKind } from '../rooms/quiz';
 import type { QuizSoloAnswerResponse, QuizSoloStartResponse } from './quiz-api.types';
 import { QuizPoolService } from './quiz-pool.service';
 import { QuizServerQuestion, toPublicQuestion } from './quiz-question';
+import { StationPoolService } from './station-pool.service';
 
 // 혼자 하기 세션은 메모리에만 둔다 (재시작하면 사라짐). 만든 뒤 1시간 지나면 만료
 const SESSION_TTL_MS = 60 * 60_000;
@@ -22,11 +24,14 @@ export class QuizSoloService {
   // Map 은 넣은 순서를 지키고 TTL 이 모두 같으므로 앞쪽일수록 오래된 세션이다
   private readonly sessions = new Map<string, SoloSession>();
 
-  constructor(private readonly pool: QuizPoolService) {}
+  constructor(
+    private readonly pool: QuizPoolService,
+    private readonly stations: StationPoolService,
+  ) {}
 
-  start(): QuizSoloStartResponse {
+  start(kind: QuizKind): QuizSoloStartResponse {
     // 풀이 덜 모였으면 503
-    const questions = this.pool.buildQuiz();
+    const questions = kind === 'station' ? this.stations.buildQuiz() : this.pool.buildQuiz();
 
     const now = Date.now();
     this.prune(now);

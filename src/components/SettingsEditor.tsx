@@ -1,11 +1,23 @@
 "use client";
 
-import { GameSettings, isQuiz, TIME_LIMIT_OPTIONS } from "@/lib/game-settings";
-import { QUIZ_QUESTIONS, QUIZ_SECONDS } from "@/lib/quiz";
+import { GameSettings, TIME_LIMIT_OPTIONS } from "@/lib/game-settings";
+import type { QuizKind } from "@/lib/quiz";
+import { QUIZ_QUESTIONS, QUIZ_RULES, QUIZ_TEXT, quizKindOf } from "@/lib/quiz";
 
 const GAME_TYPES = [
-  { gameType: "classic" as const, emoji: "🗺️", title: "지도에 찍기", desc: "로드뷰를 보고 지도에서 위치 찾기" },
-  { gameType: "quiz" as const, emoji: "❓", title: "4지선다 퀴즈", desc: `${QUIZ_SECONDS}초 안에 지역 고르기` },
+  { gameType: "classic" as const, emoji: "🗺️", title: "지도에 찍기", desc: "지도에서 위치 찾기" },
+  {
+    gameType: "quiz" as const,
+    emoji: QUIZ_TEXT.region.emoji,
+    title: QUIZ_TEXT.region.title,
+    desc: `${QUIZ_RULES.region.seconds}초 안에 지역 고르기`,
+  },
+  {
+    gameType: "station" as const,
+    emoji: QUIZ_TEXT.station.emoji,
+    title: QUIZ_TEXT.station.title,
+    desc: `${QUIZ_RULES.station.seconds}초 안에 역 고르기`,
+  },
 ];
 
 const MODES = [
@@ -33,12 +45,12 @@ export default function SettingsEditor({ settings, onChange, disabled }: Setting
       active ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
     }`;
 
-  const quiz = isQuiz(settings);
+  const quizKind = quizKindOf(settings.gameType);
 
   return (
     <div>
       <p className="text-sm font-semibold text-gray-700">게임 종류</p>
-      <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="게임 종류">
+      <div className="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label="게임 종류">
         {GAME_TYPES.map((g) => {
           const selected = (settings.gameType ?? "classic") === g.gameType;
           return (
@@ -49,33 +61,53 @@ export default function SettingsEditor({ settings, onChange, disabled }: Setting
               aria-checked={selected}
               disabled={disabled}
               onClick={() => set({ gameType: g.gameType })}
-              className={`rounded-xl border-2 px-3 py-3 text-left transition-colors disabled:cursor-not-allowed ${
+              className={`break-keep rounded-xl border-2 px-2.5 py-3 text-left transition-colors disabled:cursor-not-allowed sm:px-3 ${
                 selected ? "border-indigo-500 bg-indigo-50" : "border-gray-200 bg-white hover:bg-gray-50"
               }`}
             >
               <span className="text-xl">{g.emoji}</span>
-              <p className="mt-1 text-sm font-bold text-gray-900">{g.title}</p>
-              <p className="text-xs text-gray-500">{g.desc}</p>
+              <p className="mt-1 text-[13px] font-bold leading-tight text-gray-900 sm:text-sm">{g.title}</p>
+              <p className="mt-0.5 text-[11px] leading-snug text-gray-500 sm:text-xs">{g.desc}</p>
             </button>
           );
         })}
       </div>
 
-      {quiz ? (
-        <div className="mt-5 space-y-1.5 rounded-lg bg-indigo-50 px-3 py-2.5 text-xs leading-relaxed text-indigo-900">
-          <p>
-            ❓ 움직이지 않는 로드뷰를 보고 <b>{QUIZ_SECONDS}초 안에</b> 4개 중 지역을 골라요. 한 판 <b>{QUIZ_QUESTIONS}문제</b>.
-          </p>
-          <p>
-            ✅ 정답: <b>쉬움(시·도) +1,000 / 어려움(시·군·구) +1,500</b>, 빨리 맞힐수록 남은 1초당 +50
-          </p>
-          <p>
-            ❌ 오답·시간 초과: <b>-500</b> (총점은 0 아래로 안 내려가요)
-          </p>
-        </div>
+      {quizKind ? (
+        <QuizRules kind={quizKind} />
       ) : (
         <ClassicSettings settings={settings} set={set} chip={chip} disabled={disabled} />
       )}
+    </div>
+  );
+}
+
+// 퀴즈 규칙 안내
+function QuizRules({ kind }: { kind: QuizKind }) {
+  const { seconds, bonusPerSec } = QUIZ_RULES[kind];
+  const { emoji, levelLabel } = QUIZ_TEXT[kind];
+  return (
+    <div className="mt-5 space-y-1.5 rounded-lg bg-indigo-50 px-3 py-2.5 text-xs leading-relaxed text-indigo-900">
+      {kind === "station" ? (
+        <p>
+          {emoji} 지하철역 바로 앞 로드뷰를 보고 <b>{seconds}초 안에</b> 4개 중 무슨 역인지 골라요. 이동은 안 되고{" "}
+          <b>드래그해서 둘러볼 수</b> 있어요. 한 판 <b>{QUIZ_QUESTIONS}문제</b>.
+        </p>
+      ) : (
+        <p>
+          {emoji} 움직이지 않는 로드뷰를 보고 <b>{seconds}초 안에</b> 4개 중 지역을 골라요. 한 판 <b>{QUIZ_QUESTIONS}문제</b>.
+        </p>
+      )}
+      <p>
+        ✅ 정답:{" "}
+        <b>
+          쉬움({levelLabel.easy}) +1,000 / 어려움({levelLabel.hard}) +1,500
+        </b>
+        , 빨리 맞힐수록 남은 1초당 +{bonusPerSec}
+      </p>
+      <p>
+        ❌ 오답·시간 초과: <b>-500</b> (총점은 0 아래로 안 내려가요)
+      </p>
     </div>
   );
 }

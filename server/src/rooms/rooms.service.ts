@@ -16,10 +16,11 @@ import { MAX_ITEMS_PER_GAME } from '../challenges/items';
 import { haversineKm, ROUNDS_PER_GAME, scoreGuesses } from '../challenges/score';
 import { QuizPoolService } from '../quiz/quiz-pool.service';
 import { QuizServerQuestion, toPublicQuestion } from '../quiz/quiz-question';
+import { StationPoolService } from '../quiz/station-pool.service';
 import { CreateRoomDto, JoinRoomDto } from './dto/create-room.dto';
 import { RoomStartDto } from './dto/lobby.dto';
 import { RoomAnswerDto, RoomAttackDto, RoomAwayDto, RoomGuessDto, RoomPositionDto } from './dto/round.dto';
-import { applyQuizDelta, QUIZ_QUESTIONS, QUIZ_SECONDS, quizDelta } from './quiz';
+import { applyQuizDelta, QUIZ_QUESTIONS, QUIZ_RULES, QuizKind, quizDelta, quizKindOf } from './quiz';
 import { loadRoomTimings, RoomTimings } from './room.config';
 import {
   ROOM_MAX_PLAYERS,
@@ -128,6 +129,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
   constructor(
     config: ConfigService,
     private readonly quizPool: QuizPoolService,
+    private readonly stationPool: StationPoolService,
   ) {
     this.timings = loadRoomTimings(config);
   }
@@ -262,10 +264,12 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       throw new ConflictException('모든 참가자가 준비해야 시작할 수 있어요');
     }
 
-    if (isQuiz(room)) {
+    const kind = quizKind(room);
+    if (kind) {
       // 문제는 서버가 문제 풀에서 고른다 (본문의 locations 는 무시). 풀이 덜 모였으면 503 이고,
       // 방 상태를 바꾸기 전에 던지므로 방은 대기실 그대로 남는다
-      const quiz = this.quizPool.buildQuiz(QUIZ_QUESTIONS);
+      const quiz =
+        kind === 'station' ? this.stationPool.buildQuiz(QUIZ_QUESTIONS) : this.quizPool.buildQuiz(QUIZ_QUESTIONS);
       room.quiz = quiz;
       // 라운드 수·결과 공개 좌표는 classic 과 같이 locations 를 쓴다
       room.locations = quiz.map((q) => ({ ...q.location }));
@@ -497,10 +501,11 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     }
     room.attacks = [];
 
-    if (isQuiz(room)) {
-      // 퀴즈는 설정의 제한 시간과 상관없이 문제마다 QUIZ_SECONDS 초
+    const kind = quizKind(room);
+    if (kind) {
+      // 퀴즈는 설정의 제한 시간과 상관없이 문제마다 종류별 제한 시간 (지역 15초 / 지하철역 30초)
       room.questionStartedAt = now;
-      room.roundDeadline = now + QUIZ_SECONDS * this.timings.secondMs + this.timings.graceMs;
+      room.roundDeadline = now + QUIZ_RULES[kind].seconds * this.timings.secondMs + this.timings.graceMs;
     } else {
       const { timeLimit } = room.settings;
       room.questionStartedAt = null;
@@ -521,12 +526,13 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     this.clearTimers(room);
     const round = room.round;
     const answer = room.locations[round - 1];
-    const quiz = isQuiz(room) ? room.quiz[round - 1] : undefined;
-    if (quiz) {
+    const kind = quizKind(room);
+    const quiz = kind ? room.quiz[round - 1] : undefined;
+    if (kind && quiz) {
       room.rounds.push({
         round,
         answer: { ...answer },
-        results: this.scoreQuizRound(room, quiz),
+        results: this.scoreQuizRound(room, quiz, kind),
         quiz: { choices: [...quiz.choices], answer: quiz.answer, level: quiz.level },
       });
     } else {
@@ -570,10 +576,10 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
 
   // quiz: 맞히면 기본 점수 + 남은 초 보너스, 틀리거나 시간 초과면 감점. 총점은 0 아래로 내려가지 않는다.
   // score 에는 이번 문제 점수 변화(자리 비움 감점 포함, 음수 가능)를 그대로 담는다
-  private scoreQuizRound(room: Room, quiz: QuizServerQuestion): RoomRoundPlayerResult[] {
+  private scoreQuizRound(room: Room, quiz: QuizServerQuestion, kind: QuizKind): RoomRoundPlayerResult[] {
     const secondMs = Math.max(1, this.timings.secondMs);
     // 제한 시간이 끝나는 시각 (여유 시간 제외). 여유 시간 안에 고르면 남은 초는 0
-    const limitEnd = (room.questionStartedAt ?? Date.now()) + QUIZ_SECONDS * this.timings.secondMs;
+    const limitEnd = (room.questionStartedAt ?? Date.now()) + QUIZ_RULES[kind].seconds * this.timings.secondMs;
     return room.players.map((p) => {
       const submission = p.submission ?? { ...EMPTY_SUBMISSION, items: [] };
       p.submission = submission;
@@ -584,7 +590,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
           : 0;
       // 자리 비움 감점 (제출 전 다른 탭/창으로 나간 횟수 × ROOM_AWAY_PENALTY) 도 그대로 적용
       const awayPenalty = p.awayRound * ROOM_AWAY_PENALTY;
-      const delta = quizDelta(correct, quiz.level, remainingSec) - awayPenalty;
+      const delta = quizDelta(correct, quiz.level, remainingSec, kind) - awayPenalty;
       p.totalScore = applyQuizDelta(p.totalScore, delta);
       return {
         playerId: p.id,
@@ -843,6 +849,11 @@ function toSettings(s: GameSettings): GameSettings {
   };
 }
 
+// 퀴즈 방이면 퀴즈 종류 (지역 / 지하철역), 아니면 null
+function quizKind(room: Room): QuizKind | null {
+  return quizKindOf(room.settings.gameType);
+}
+
 function isQuiz(room: Room): boolean {
-  return room.settings.gameType === 'quiz';
+  return quizKind(room) !== null;
 }

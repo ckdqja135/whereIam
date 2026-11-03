@@ -1,9 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { flagStation } from "@/lib/api";
 import type { Avatar } from "@/lib/avatar";
-import type { QuizLevel } from "@/lib/quiz";
-import { QUIZ_LEVEL_LABEL, QUIZ_SECONDS } from "@/lib/quiz";
+import type { QuizKind, QuizLevel } from "@/lib/quiz";
+import { QUIZ_RULES, QUIZ_TEXT } from "@/lib/quiz";
 import RoadviewPane from "../RoadviewPane";
 import AvatarPin from "../avatar/AvatarPin";
 
@@ -18,6 +19,7 @@ export interface QuizPicker {
 const PLACEHOLDER = { lat: 36.5, lng: 127.5 };
 
 interface QuizStageProps {
+  kind: QuizKind;
   panoId: number;
   questionNo: number;
   total: number;
@@ -40,8 +42,10 @@ interface QuizStageProps {
 
 const MARKS = ["A", "B", "C", "D"];
 
-// 4지선다 문제 화면: 움직일 수 없는 로드뷰(사진처럼) + 타이머 + 보기 4개
+// 4지선다 문제 화면: 움직일 수 없는 로드뷰 + 타이머 + 보기 4개.
+// 지역 퀴즈는 사진처럼 완전히 고정, 지하철역 퀴즈는 제자리에서 시점만 돌려 볼 수 있다
 export default function QuizStage({
+  kind,
   panoId,
   questionNo,
   total,
@@ -58,12 +62,20 @@ export default function QuizStage({
   banner,
 }: QuizStageProps) {
   const revealed = answer !== null;
-  const fraction = secondsLeft === null ? 1 : Math.max(0, Math.min(1, secondsLeft / QUIZ_SECONDS));
+  const fraction = secondsLeft === null ? 1 : Math.max(0, Math.min(1, secondsLeft / QUIZ_RULES[kind].seconds));
   const urgent = secondsLeft !== null && secondsLeft <= 5;
+  const text = QUIZ_TEXT[kind];
+  const canLookAround = kind === "station";
+  // 지하철역: 정답 공개 뒤 "역 이름이 보였어요" 신고 (사진 확인이 놓친 간판). 신고하면 그 문제는 다시 안 나온다
+  const [flagged, setFlagged] = useState(false);
+  const flag = () => {
+    setFlagged(true);
+    flagStation({ panoId }).catch(() => {});
+  };
 
   return (
     <div className="relative h-dvh w-screen overflow-hidden bg-gray-900">
-      {/* 이동·회전·확대를 모두 막고 화살표·도로명도 숨긴 로드뷰 = 스크린샷처럼 보인다 */}
+      {/* 이동·확대를 막고 화살표·도로명도 숨긴 로드뷰. 지역 퀴즈는 회전도 막아 스크린샷처럼 보인다 */}
       <div className="wia-rv-bare absolute inset-0">
         <RoadviewPane
           panoId={panoId}
@@ -71,7 +83,7 @@ export default function QuizStage({
           lng={PLACEHOLDER.lng}
           isLoading={false}
           allowMove={false}
-          allowPan={false}
+          allowPan={canLookAround}
           allowZoom={false}
           onActualPosition={onLoaded}
         />
@@ -90,7 +102,7 @@ export default function QuizStage({
                 level === "hard" ? "bg-rose-500 text-white" : "bg-emerald-500 text-white"
               }`}
             >
-              {level === "hard" ? "어려움" : "쉬움"} · {QUIZ_LEVEL_LABEL[level]}
+              {level === "hard" ? "어려움" : "쉬움"} · {text.levelLabel[level]}
             </div>
           </div>
         </div>
@@ -114,8 +126,28 @@ export default function QuizStage({
       <div className="absolute bottom-0 left-0 right-0 z-10 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
         <div className="mx-auto max-w-2xl">
           {banner && <div className="mb-2 flex justify-center">{banner}</div>}
+          {canLookAround && revealed && (
+            <div className="mb-2 flex justify-center">
+              {flagged ? (
+                <span className="rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-white/90">
+                  신고했어요. 이 문제는 다시 나오지 않아요
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={flag}
+                  className="rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-white/90 hover:bg-black/75"
+                >
+                  🚩 사진에 역 이름이 보였어요
+                </button>
+              )}
+            </div>
+          )}
           <p className="mb-2 text-center text-lg font-extrabold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] sm:text-xl">
-            여기는 어디일까요?
+            {text.prompt}
+            {canLookAround && !revealed && (
+              <span className="mt-0.5 block text-xs font-semibold text-white/80">화면을 드래그해서 둘러보세요</span>
+            )}
           </p>
           <div className="grid grid-cols-2 gap-2">
             {choices.map((c, i) => {

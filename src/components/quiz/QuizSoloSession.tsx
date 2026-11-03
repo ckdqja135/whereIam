@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Profile } from "@/lib/profile";
-import type { QuizPublicQuestion } from "@/lib/quiz";
-import { applyQuizDelta, QUIZ_SECONDS, quizDelta } from "@/lib/quiz";
+import type { QuizKind, QuizPublicQuestion } from "@/lib/quiz";
+import { applyQuizDelta, QUIZ_RULES, QUIZ_TEXT, quizDelta } from "@/lib/quiz";
 import { answerQuizSolo, reportQuizPosition, startQuizSolo } from "@/lib/api";
-import { ensureQuizPoolReady } from "@/lib/quiz-pool";
+import { ensureQuizPoolReady, ensureStationPoolReady } from "@/lib/quiz-pool";
 import { useBlockDevtools } from "@/lib/use-anti-cheat";
 import AvatarPin from "../avatar/AvatarPin";
 import QuizStage from "./QuizStage";
@@ -19,6 +19,7 @@ export interface QuizResult {
 }
 
 interface QuizSoloSessionProps {
+  kind: QuizKind;
   profile: Profile;
   onFinish: (results: QuizResult[], total: number) => void;
 }
@@ -27,8 +28,9 @@ interface QuizSoloSessionProps {
 const REVEAL_MS = 3000;
 const LOAD_FALLBACK_MS = 2500;
 
-// 혼자 하는 4지선다 퀴즈. 문제는 서버의 문제 풀에서 오고, 채점도 서버가 한다 (브라우저는 정답을 모른다).
-export default function QuizSoloSession({ profile, onFinish }: QuizSoloSessionProps) {
+// 혼자 하는 4지선다 퀴즈 (지역 / 지하철역). 문제는 서버의 문제 풀에서 오고, 채점도 서버가 한다 (브라우저는 정답을 모른다).
+export default function QuizSoloSession({ kind, profile, onFinish }: QuizSoloSessionProps) {
+  const seconds = QUIZ_RULES[kind].seconds;
   const [session, setSession] = useState<{ id: string; questions: QuizPublicQuestion[] } | null>(null);
   const [preparing, setPreparing] = useState<{ total: number; minimum: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,8 +51,9 @@ export default function QuizSoloSession({ profile, onFinish }: QuizSoloSessionPr
     let cancelled = false;
     (async () => {
       try {
-        await ensureQuizPoolReady((t, m) => !cancelled && setPreparing({ total: t, minimum: m }));
-        const res = await startQuizSolo();
+        const ensure = kind === "station" ? ensureStationPoolReady : ensureQuizPoolReady;
+        await ensure((t, m) => !cancelled && setPreparing({ total: t, minimum: m }));
+        const res = await startQuizSolo(kind);
         if (!cancelled) setSession({ id: res.sessionId, questions: res.questions });
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "문제를 불러오지 못했어요.");
@@ -59,7 +62,7 @@ export default function QuizSoloSession({ profile, onFinish }: QuizSoloSessionPr
     return () => {
       cancelled = true;
     };
-  }, [attempt]);
+  }, [attempt, kind]);
 
   useBlockDevtools(session !== null && phase === "question");
 
@@ -81,7 +84,7 @@ export default function QuizSoloSession({ profile, onFinish }: QuizSoloSessionPr
     return () => clearTimeout(t);
   }, [session, phase, index, markLoaded]);
 
-  const secondsLeft = startedAt === null ? QUIZ_SECONDS : Math.max(0, QUIZ_SECONDS - (now - startedAt) / 1000);
+  const secondsLeft = startedAt === null ? seconds : Math.max(0, seconds - (now - startedAt) / 1000);
 
   const answer = useCallback(
     async (choice: number | null) => {
@@ -92,7 +95,7 @@ export default function QuizSoloSession({ profile, onFinish }: QuizSoloSessionPr
       setPhase("checking");
       try {
         const res = await answerQuizSolo(session.id, { index, choice });
-        const delta = quizDelta(res.correct, question.level, remaining);
+        const delta = quizDelta(res.correct, question.level, remaining, kind);
         setAnswerIndex(res.answer);
         setResults((r) => [...r, { question, answer: res.answer, choice, correct: res.correct, delta }]);
         setTotal((t) => applyQuizDelta(t, delta));
@@ -101,7 +104,7 @@ export default function QuizSoloSession({ profile, onFinish }: QuizSoloSessionPr
         setError(err instanceof Error ? err.message : "채점하지 못했어요.");
       }
     },
-    [session, question, index, secondsLeft]
+    [session, question, index, secondsLeft, kind]
   );
 
   // 시계 (시간이 다 되면 시간 초과로 제출). answerRef 는 위 answer 를 가리킨다
@@ -119,10 +122,10 @@ export default function QuizSoloSession({ profile, onFinish }: QuizSoloSessionPr
       const t = Date.now();
       setNow(t);
       const s = startedAtRef.current;
-      if (s !== null && t - s >= QUIZ_SECONDS * 1000) answerRef.current(null);
+      if (s !== null && t - s >= seconds * 1000) answerRef.current(null);
     }, 100);
     return () => clearInterval(id);
-  }, [session, phase]);
+  }, [session, phase, seconds]);
 
   // 정답을 잠깐 보여주고 다음 문제로
   useEffect(() => {
@@ -175,7 +178,7 @@ export default function QuizSoloSession({ profile, onFinish }: QuizSoloSessionPr
   if (!session || !question) {
     return (
       <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-gray-900 px-4 text-white">
-        <p className="text-4xl">❓</p>
+        <p className="text-4xl">{QUIZ_TEXT[kind].emoji}</p>
         <p className="text-lg font-bold">{preparing ? "문제를 모으는 중이에요" : "문제를 불러오는 중이에요"}</p>
         {preparing && (
           <>
@@ -186,7 +189,8 @@ export default function QuizSoloSession({ profile, onFinish }: QuizSoloSessionPr
               />
             </div>
             <p className="text-center text-xs text-white/60">
-              처음 한 번만 필요해요. 전국의 로드뷰를 모으고 있어요 ({preparing.total}/{preparing.minimum})
+              처음 한 번만 필요해요. {kind === "station" ? "전국 지하철역 앞" : "전국의"} 로드뷰를 모으고 있어요 (
+              {preparing.total}/{preparing.minimum})
             </p>
           </>
         )}
@@ -208,6 +212,7 @@ export default function QuizSoloSession({ profile, onFinish }: QuizSoloSessionPr
   return (
     <QuizStage
       key={index}
+      kind={kind}
       panoId={question.panoId}
       questionNo={index + 1}
       total={session.questions.length}

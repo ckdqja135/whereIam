@@ -10,6 +10,7 @@ import { joinRoom, roomActions } from "@/lib/api";
 import { randomAvatar } from "@/lib/avatar";
 import { loadProfile, NICKNAME_MAX, saveProfile, validateNickname } from "@/lib/profile";
 import { clearRoomCredentials, loadRoomCredentials, RoomCredentials, saveRoomCredentials, useRoomState } from "@/lib/use-room";
+import { quizKindOf } from "@/lib/quiz";
 import AvatarCustomizer from "../avatar/AvatarCustomizer";
 import RoomLobby from "./RoomLobby";
 import RoomRound from "./RoomRound";
@@ -91,7 +92,7 @@ function RoomSession({ code, creds, onReset }: { code: string; creds: RoomCreden
     </div>
   );
 
-  const quiz = state.settings.gameType === "quiz";
+  const quiz = quizKindOf(state.settings.gameType) !== null;
   let screen: React.ReactNode;
   if (state.status === "lobby") {
     screen = (

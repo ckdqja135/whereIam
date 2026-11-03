@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { reportQuizPosition, roomActions } from "@/lib/api";
 import { ROOM_AWAY_PENALTY, RoomState } from "@/lib/room-types";
 import { normalizeAvatar } from "@/lib/avatar";
-import { QUIZ_SECONDS } from "@/lib/quiz";
+import { QUIZ_RULES, quizKindOf } from "@/lib/quiz";
 import { useAwayDetector } from "@/lib/use-anti-cheat";
 import AvatarPin from "../avatar/AvatarPin";
 import QuizStage, { QuizPicker } from "../quiz/QuizStage";
@@ -12,7 +12,7 @@ import QuizStage, { QuizPicker } from "../quiz/QuizStage";
 interface RoomQuizProps {
   code: string;
   token: string;
-  state: RoomState; // status === "playing" | "reveal", settings.gameType === "quiz"
+  state: RoomState; // status === "playing" | "reveal", settings.gameType === "quiz" | "station"
   clockOffset: number;
   onState: (s: RoomState) => void;
 }
@@ -29,6 +29,8 @@ export default function RoomQuiz({ code, token, state, clockOffset, onState }: R
   const choices = result?.quiz?.choices ?? state.quiz?.choices ?? [];
   const level = result?.quiz?.level ?? state.quiz?.level ?? "easy";
   const panoId = state.quiz?.panoId ?? 0;
+  const kind = quizKindOf(state.settings.gameType) ?? "region";
+  const seconds = QUIZ_RULES[kind].seconds;
 
   const [myChoice, setMyChoice] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
@@ -44,7 +46,7 @@ export default function RoomQuiz({ code, token, state, clockOffset, onState }: R
   const serverNow = now + clockOffset;
   const secondsLeft =
     !revealing && state.roundDeadline !== null
-      ? Math.max(0, Math.min(QUIZ_SECONDS, (state.roundDeadline - DEADLINE_GRACE_MS - serverNow) / 1000))
+      ? Math.max(0, Math.min(seconds, (state.roundDeadline - DEADLINE_GRACE_MS - serverNow) / 1000))
       : null;
   const answered = myChoice !== null || me.submitted;
 
@@ -120,6 +122,7 @@ export default function RoomQuiz({ code, token, state, clockOffset, onState }: R
 
   return (
     <QuizStage
+      kind={kind}
       panoId={panoId}
       onLoaded={(lat, lng) => {
         // 실제 좌표를 서버에 보고 (저장된 문제 좌표와 다르면 서버가 그 문제를 풀에서 뺀다)
