@@ -82,6 +82,26 @@ export class DatabaseService implements OnApplicationShutdown {
 
       CREATE INDEX IF NOT EXISTS idx_stations_pano ON stations (bad, pano_id);
 
+      -- 오늘의 문제: 날짜(한국 시간)별 5곳. 그날 처음 요청이 오면 지역 퀴즈 문제 풀(quiz_pool)에서 골라 고정한다
+      CREATE TABLE IF NOT EXISTS daily_challenges (
+        date       TEXT PRIMARY KEY, -- "2026-11-03" (한국 시간)
+        locations  TEXT NOT NULL,    -- ChallengeLocation[] JSON (정확한 파노라마 좌표)
+        created_at TEXT NOT NULL
+      );
+
+      -- 오늘의 문제 결과 (점수는 서버가 라운드마다 매긴 것)
+      CREATE TABLE IF NOT EXISTS daily_results (
+        id          TEXT PRIMARY KEY,
+        date        TEXT NOT NULL,
+        nickname    TEXT NOT NULL,
+        avatar      TEXT NOT NULL,    -- Avatar JSON
+        rounds      TEXT NOT NULL,    -- RoundScore[] JSON
+        total_score INTEGER NOT NULL,
+        created_at  TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_daily_results_board ON daily_results (date, total_score DESC, created_at ASC);
+
       -- 서버 내부 상태 (역 목록을 마지막으로 모은 시각 등)
       CREATE TABLE IF NOT EXISTS app_meta (
         key   TEXT PRIMARY KEY,

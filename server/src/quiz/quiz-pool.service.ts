@@ -1,6 +1,7 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomInt } from 'node:crypto';
+import type { ChallengeLocation } from '../challenges/challenge.types';
 import { haversineKm } from '../challenges/score';
 import { DatabaseService } from '../database/database.service';
 import { QUIZ_CHOICES, QUIZ_QUESTIONS } from '../rooms/quiz';
@@ -116,6 +117,13 @@ export class QuizPoolService {
     const regions = this.db.prepare('SELECT DISTINCT r1, r2 FROM quiz_pool WHERE bad = 0').all() as QuizRegion[];
     const r1s = [...new Set(regions.map((r) => r.r1))];
     return picks.map((row) => this.buildQuestion(row, regions, r1s));
+  }
+
+  // 오늘의 문제용 위치 count 개 (같은 시·군·구가 겹치지 않게 무작위). 모자라면 503
+  pickLocations(count: number): ChallengeLocation[] {
+    const rows = this.pickRows(count);
+    if (rows.length < count) throw new ServiceUnavailableException(QUIZ_POOL_NOT_READY_MESSAGE);
+    return rows.map((r) => ({ lat: r.lat, lng: r.lng, panoId: r.pano_id }));
   }
 
   // ───────────── 내부 ─────────────

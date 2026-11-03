@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { NICKNAME_MAX, Profile, validateNickname } from "@/lib/profile";
 import { randomAvatar } from "@/lib/avatar";
 import type { GameSettings } from "@/lib/game-settings";
@@ -93,6 +94,21 @@ export default function LobbyScreen({
       <form onSubmit={handleSubmit} className="mx-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-xl sm:p-8">
         <h1 className="text-center text-2xl font-bold text-gray-900">Where I Am</h1>
         <p className="mt-1 text-center text-sm text-gray-500">로드뷰를 보고 대한민국 어디인지 맞혀보세요</p>
+
+        {/* 오늘의 문제 (서버가 있을 때만) */}
+        {roomsAvailable && (
+          <Link
+            href="/daily"
+            className="mt-4 flex items-center gap-3 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-3 text-white shadow-md transition-transform hover:scale-[1.01]"
+          >
+            <span className="text-2xl">📅</span>
+            <span className="flex-1">
+              <span className="block text-sm font-extrabold">오늘의 문제</span>
+              <span className="block text-xs text-white/90">모두 같은 5곳, 하루 한 번! 오늘의 순위에 도전</span>
+            </span>
+            <span className="text-lg font-bold">→</span>
+          </Link>
+        )}
 
         {/* 캐릭터 */}
         <div className="mt-4">

@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ChallengesModule } from './challenges/challenges.module';
+import { DailyModule } from './daily/daily.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health.controller';
 import { createProxySecretMiddleware } from './proxy-secret.middleware';
@@ -18,6 +19,7 @@ import { RoomsModule } from './rooms/rooms.module';
     ChallengesModule,
     QuizModule,
     RoomsModule,
+    DailyModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

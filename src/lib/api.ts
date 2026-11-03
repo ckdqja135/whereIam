@@ -37,6 +37,16 @@ import type {
   StationTodoResponse,
 } from "./quiz-api-types";
 import type { QuizKind } from "./quiz";
+import type {
+  DailyFinishRequest,
+  DailyFinishResponse,
+  DailyGuessRequest,
+  DailyGuessResponse,
+  DailyInfoResponse,
+  DailyLeaderboardResponse,
+  DailyRoundStartResponse,
+  DailyStartResponse,
+} from "./daily-api-types";
 
 // 백엔드(server/, 자체 서버) 주소. Vercel 환경변수 NEXT_PUBLIC_API_URL 로 설정한다.
 // - "/api/backend" (권장): 같은 도메인의 프록시 라우트를 거쳐 Vercel 서버가 BACKEND_URL 로 대신 호출한다.
@@ -200,4 +210,39 @@ export function submitChallengeResult(id: string, body: SubmitResultRequest) {
 
 export function getLeaderboard(id: string) {
   return request<LeaderboardResponse>(`/challenges/${encodeURIComponent(id)}/leaderboard`);
+}
+
+// ---------- 오늘의 문제 ----------
+
+export function getDailyInfo() {
+  return request<DailyInfoResponse>("/daily");
+}
+
+export function startDaily() {
+  return request<DailyStartResponse>("/daily/start", { method: "POST", body: "{}" });
+}
+
+export function startDailyRound(sessionId: string, round: number) {
+  return request<DailyRoundStartResponse>(`/daily/${encodeURIComponent(sessionId)}/rounds/${round}/start`, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export function guessDaily(sessionId: string, round: number, body: DailyGuessRequest) {
+  return request<DailyGuessResponse>(`/daily/${encodeURIComponent(sessionId)}/rounds/${round}/guess`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function finishDaily(sessionId: string, body: DailyFinishRequest) {
+  return request<DailyFinishResponse>(`/daily/${encodeURIComponent(sessionId)}/finish`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getDailyLeaderboard(date: string) {
+  return request<DailyLeaderboardResponse>(`/daily/${encodeURIComponent(date)}/leaderboard`);
 }

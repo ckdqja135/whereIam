@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getRandomRoadviewLocation } from "@/lib/random-location";
-import { calculateDistance, DistanceResult } from "@/lib/haversine";
+import { calculateDistance, distanceFromKm, DistanceResult } from "@/lib/haversine";
 import { calculateScore, ROUNDS_PER_GAME } from "@/lib/score";
 import { getAvatarPin } from "@/lib/avatar-pin";
 import { formatAddress, getAddress, AddressResult } from "@/lib/address";
 import type { Profile } from "@/lib/profile";
 import type { GameSettings } from "@/lib/game-settings";
-import type { ChallengeLocation } from "@/lib/api-types";
+import type { ChallengeLocation, Guess } from "@/lib/api-types";
 import type { RoundResult } from "@/lib/game";
 import { ItemId, itemDef, roundPenalty } from "@/lib/items";
 import { useRoundItems } from "@/lib/use-round-items";
@@ -18,14 +18,29 @@ import RoadviewPane, { RoadviewHandle } from "./RoadviewPane";
 import MapPane from "./MapPane";
 import AvatarPin from "./avatar/AvatarPin";
 
-type RoundPhase = "loading" | "playing" | "submitted" | "error";
+type RoundPhase = "loading" | "playing" | "submitting" | "submitted" | "error";
 type ViewMode = "roadview" | "map";
+
+// 서버가 라운드마다 로드뷰를 내주고 채점하는 판 (오늘의 문제). 정답 좌표는 위치를 낸 뒤에만 받는다
+export interface ServerRounds {
+  total: number;
+  start: (round: number) => Promise<{ panoId: number }>;
+  guess: (
+    round: number,
+    guess: Guess
+  ) => Promise<{ answer: { lat: number; lng: number }; score: number; distanceKm: number | null }>;
+}
+
+// 서버 판에서 정답을 받기 전 로드뷰에 넘기는 자리표시 좌표 (panoId 의 실제 위치로 열린다)
+const PLACEHOLDER = { lat: 36.5, lng: 127.5 };
 
 interface GameSessionProps {
   profile: Profile;
   settings: GameSettings;
   // 챌린지처럼 정해진 위치로 플레이할 때. 없으면 라운드마다 랜덤 출제
   locations?: ChallengeLocation[];
+  // 서버가 출제·채점하는 판 (locations 대신)
+  server?: ServerRounds;
   onFinish: (results: RoundResult[]) => void;
 }
 
@@ -36,8 +51,8 @@ function formatTime(seconds: number): string {
 }
 
 // 카카오 SDK가 로드된 뒤에만 렌더링해야 한다.
-export default function GameSession({ profile, settings, locations, onFinish }: GameSessionProps) {
-  const totalRounds = locations?.length ?? ROUNDS_PER_GAME;
+export default function GameSession({ profile, settings, locations, server, onFinish }: GameSessionProps) {
+  const totalRounds = server?.total ?? locations?.length ?? ROUNDS_PER_GAME;
   const hasTimer = settings.timeLimit > 0;
 
   const [phase, setPhase] = useState<RoundPhase>("loading");
@@ -79,7 +94,13 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
       setRemainingSeconds(settings.timeLimit);
 
       try {
-        const location = locations ? locations[roundNumber - 1] : await getRandomRoadviewLocation();
+        let location: ChallengeLocation;
+        if (server) {
+          const { panoId } = await server.start(roundNumber);
+          location = { panoId, ...PLACEHOLDER };
+        } else {
+          location = locations ? locations[roundNumber - 1] : await getRandomRoadviewLocation();
+        }
         setAnswer(location);
         setPhase("playing");
       } catch (err) {
@@ -87,7 +108,7 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
         setPhase("error");
       }
     },
-    [locations, settings.timeLimit, resetItems]
+    [locations, server, settings.timeLimit, resetItems]
   );
 
   // 첫 라운드
@@ -121,28 +142,49 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remainingSeconds, phase, hasTimer]);
 
-  const submitGuess = useCallback(() => {
-    if (!answer) return;
+  // 결과 공개 (정답·점수가 정해진 뒤)
+  const reveal = useCallback(
+    (finalAnswer: ChallengeLocation, dist: DistanceResult | null, score: number, penalty: number) => {
+      setAnswer(finalAnswer);
+      setDistance(dist);
+      setRoundScore(score);
+      setResults((prev) => [...prev, { answer: finalAnswer, guess: guessCoord, distance: dist, score, items: roundItems, penalty }]);
+      setPhase("submitted");
+      setView("map");
+
+      // 정답 위치 주소는 비동기로 받아서 이번 라운드 결과에 채운다
+      const roundIndex = round - 1;
+      getAddress(finalAnswer.lat, finalAnswer.lng).then((address) => {
+        if (roundRef.current === roundIndex + 1) setRoundAddress(address);
+        setResults((prev) => prev.map((r, i) => (i === roundIndex ? { ...r, address } : r)));
+      });
+    },
+    [guessCoord, round, roundItems]
+  );
+
+  const submitGuess = useCallback(async () => {
+    if (!answer || phase !== "playing") return;
+    if (server) {
+      // 서버가 채점하고 정답 좌표를 알려준다 (아이템 없음)
+      setPhase("submitting");
+      try {
+        const res = await server.guess(round, guessCoord);
+        const dist = res.distanceKm === null ? null : distanceFromKm(res.distanceKm);
+        reveal({ ...answer, ...res.answer }, dist, res.score, 0);
+      } catch (err) {
+        setErrorMsg(err instanceof Error ? err.message : "답을 보내지 못했어요.");
+        setPhase("error");
+      }
+      return;
+    }
     const dist = guessCoord
       ? calculateDistance(answer.lat, answer.lng, guessCoord.lat, guessCoord.lng)
       : null;
     // 아이템을 쓴 만큼 감점 (0점 아래로는 내려가지 않음, 서버와 같은 규칙)
     const penalty = roundPenalty(roundItems);
     const score = dist ? Math.max(0, calculateScore(dist.km) - penalty) : 0;
-
-    setDistance(dist);
-    setRoundScore(score);
-    setResults((prev) => [...prev, { answer, guess: guessCoord, distance: dist, score, items: roundItems, penalty }]);
-    setPhase("submitted");
-    setView("map");
-
-    // 정답 위치 주소는 비동기로 받아서 이번 라운드 결과에 채운다
-    const roundIndex = round - 1;
-    getAddress(answer.lat, answer.lng).then((address) => {
-      if (roundRef.current === roundIndex + 1) setRoundAddress(address);
-      setResults((prev) => prev.map((r, i) => (i === roundIndex ? { ...r, address } : r)));
-    });
-  }, [answer, guessCoord, round, roundItems]);
+    reveal(answer, dist, score, penalty);
+  }, [answer, phase, server, round, guessCoord, roundItems, reveal]);
 
   // 라운드 진행 중 개발자 도구 단축키/우클릭 막기
   useAntiCheat(phase === "playing");
@@ -291,6 +333,10 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
           </div>
         )}
 
+        {phase === "submitting" && (
+          <div className="pointer-events-none rounded-full bg-black/70 px-4 py-2 text-sm font-semibold text-white">채점 중…</div>
+        )}
+
         {/* 지도에서 위치 안내 */}
         {phase === "playing" && view === "map" && !guessCoord && (
           <div className="pointer-events-none rounded-full bg-black/60 px-4 py-2 text-xs text-white">
@@ -332,7 +378,7 @@ export default function GameSession({ profile, settings, locations, onFinish }: 
               {/* 제출 */}
               {view === "map" && (
                 <button
-                  onClick={submitGuess}
+                  onClick={() => void submitGuess()}
                   disabled={!guessCoord}
                   className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
                 >

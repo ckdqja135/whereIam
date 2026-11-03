@@ -27,10 +27,12 @@ export function calculateDistance(
       Math.sin(dLng / 2);
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const km = EARTH_RADIUS_KM * c;
+  return distanceFromKm(EARTH_RADIUS_KM * c);
+}
+
+// km → 표시용 거리 (서버가 계산한 거리를 같은 형식으로 보여줄 때도 쓴다)
+export function distanceFromKm(km: number): DistanceResult {
   const m = km * 1000;
-
   const formatted = km >= 1 ? `${km.toFixed(1)}km` : `${Math.round(m)}m`;
-
   return { km, m, formatted };
 }
