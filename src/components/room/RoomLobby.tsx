@@ -100,7 +100,8 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
   };
 
   return (
-    <div className="h-dvh overflow-y-auto bg-gradient-to-b from-indigo-950 via-gray-900 to-gray-900 px-4 py-8">
+    // 모바일은 오른쪽 아래 채팅 버튼이 시작 버튼을 가리지 않도록 아래 여백을 넉넉히 둔다 (끝까지 스크롤하면 버튼 위로 올라온다)
+    <div className="h-dvh overflow-y-auto bg-gradient-to-b from-indigo-950 via-gray-900 to-gray-900 px-4 pb-40 pt-8 sm:pb-8">
       <div className="mx-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-xl sm:p-8">
         <p className="text-center text-sm text-gray-500">대결 대기실</p>
         <p className="mt-1 text-center font-mono text-4xl font-black tracking-[0.3em] text-gray-900">{code}</p>
