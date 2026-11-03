@@ -25,7 +25,8 @@ type ViewMode = "roadview" | "map";
 // 서버가 라운드마다 로드뷰를 내주고 채점하는 판 (오늘의 문제). 정답 좌표는 위치를 낸 뒤에만 받는다
 export interface ServerRounds {
   total: number;
-  start: (round: number) => Promise<{ panoId: number }>;
+  // remainingSec: 서버 기준 남은 시간 (새로고침 뒤 이어서 할 때 제한 시간이 처음부터 다시 시작되지 않도록)
+  start: (round: number) => Promise<{ panoId: number; remainingSec?: number }>;
   guess: (
     round: number,
     guess: Guess
@@ -42,6 +43,8 @@ interface GameSessionProps {
   locations?: ChallengeLocation[];
   // 서버가 출제·채점하는 판 (locations 대신)
   server?: ServerRounds;
+  // 이어서 할 때 이미 끝낸 라운드의 결과 (그 다음 라운드부터 시작)
+  initialResults?: RoundResult[];
   onFinish: (results: RoundResult[]) => void;
 }
 
@@ -52,14 +55,15 @@ function formatTime(seconds: number): string {
 }
 
 // 카카오 SDK가 로드된 뒤에만 렌더링해야 한다.
-export default function GameSession({ profile, settings, locations, server, onFinish }: GameSessionProps) {
+export default function GameSession({ profile, settings, locations, server, initialResults, onFinish }: GameSessionProps) {
   const totalRounds = server?.total ?? locations?.length ?? ROUNDS_PER_GAME;
   const hasTimer = settings.timeLimit > 0;
 
   const [phase, setPhase] = useState<RoundPhase>("loading");
   const [view, setView] = useState<ViewMode>("roadview");
-  const [round, setRound] = useState(1);
-  const [results, setResults] = useState<RoundResult[]>([]);
+  const [firstRound] = useState(() => (initialResults?.length ?? 0) + 1);
+  const [round, setRound] = useState(firstRound);
+  const [results, setResults] = useState<RoundResult[]>(() => initialResults ?? []);
   const [answer, setAnswer] = useState<ChallengeLocation | null>(null);
   const [guessCoord, setGuessCoord] = useState<{ lat: number; lng: number } | null>(null);
   const [distance, setDistance] = useState<DistanceResult | null>(null);
@@ -97,8 +101,11 @@ export default function GameSession({ profile, settings, locations, server, onFi
       try {
         let location: ChallengeLocation;
         if (server) {
-          const { panoId } = await server.start(roundNumber);
+          const { panoId, remainingSec } = await server.start(roundNumber);
           location = { panoId, ...PLACEHOLDER };
+          if (remainingSec !== undefined && settings.timeLimit > 0) {
+            setRemainingSeconds(Math.max(0, Math.min(settings.timeLimit, Math.floor(remainingSec))));
+          }
         } else {
           location = locations ? locations[roundNumber - 1] : await getRandomRoadviewLocation();
         }
@@ -112,10 +119,10 @@ export default function GameSession({ profile, settings, locations, server, onFi
     [locations, server, settings.timeLimit, resetItems]
   );
 
-  // 첫 라운드
+  // 첫 라운드 (이어서 하면 끝낸 다음 라운드)
   useEffect(() => {
-    startRound(1);
-  }, [startRound]);
+    startRound(firstRound);
+  }, [startRound, firstRound]);
 
   // 타이머
   useEffect(() => {

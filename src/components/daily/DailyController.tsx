@@ -5,19 +5,31 @@ import Link from "next/link";
 import { CalendarDays } from "lucide-react";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useKakaoSdk } from "@/lib/use-kakao-sdk";
-import { finishDaily, getDailyInfo, getDailyLeaderboard, guessDaily, startDaily, startDailyRound } from "@/lib/api";
-import type { LeaderboardEntry } from "@/lib/api-types";
-import type { DailyInfoResponse, DailyStartResponse } from "@/lib/daily-api-types";
 import {
+  finishDaily,
+  getDailyInfo,
+  getDailyLeaderboard,
+  getDailySession,
+  guessDaily,
+  startDaily,
+  startDailyRound,
+} from "@/lib/api";
+import type { LeaderboardEntry } from "@/lib/api-types";
+import type { DailyFinishResponse, DailyInfoResponse, DailyRoundRecord, DailyStartResponse } from "@/lib/daily-api-types";
+import {
+  clearDailySession,
   dailyLabel,
   dailyShareText,
   DailyRecord,
   loadDailyRecord,
+  loadDailySession,
   roundGrade,
   RoundGrade,
   saveDailyRecord,
+  saveDailySession,
   shareDaily,
 } from "@/lib/daily";
+import { distanceFromKm } from "@/lib/haversine";
 import { randomAvatar } from "@/lib/avatar";
 import { loadProfile, NICKNAME_MAX, Profile, saveProfile, validateNickname } from "@/lib/profile";
 import type { RoundResult } from "@/lib/game";
@@ -28,6 +40,27 @@ import Leaderboard from "../Leaderboard";
 import ResultScreen from "../ResultScreen";
 
 type Screen = "loading" | "error" | "landing" | "playing" | "finished";
+
+function toRecord(date: string, res: DailyFinishResponse): DailyRecord {
+  return { date, resultId: res.resultId, totalScore: res.totalScore, rounds: res.rounds.map((r) => r.score), rank: res.rank };
+}
+
+// 이어서 할 때: 서버가 알려준 끝낸 라운드들 → 게임 화면의 라운드 결과 (아이템 없음)
+function toResults(answered: (DailyRoundRecord | null)[]): RoundResult[] {
+  const done: RoundResult[] = [];
+  for (const a of answered) {
+    if (!a) break;
+    done.push({
+      answer: { ...a.answer, panoId: 0 },
+      guess: a.guess,
+      distance: a.distanceKm === null ? null : distanceFromKm(a.distanceKm),
+      score: a.score,
+      items: [],
+      penalty: 0,
+    });
+  }
+  return done;
+}
 
 // /daily: 오늘의 문제. 하루 5곳을 모두가 똑같이 풀고 그날 순위에 오른다 (이 브라우저에서는 하루 한 번)
 export default function DailyController() {
@@ -62,6 +95,9 @@ function DailyGame() {
   const [profile, setProfile] = useState<Profile | null>(null);
 
   const [session, setSession] = useState<DailyStartResponse | null>(null);
+  // 새로고침 전에 하던 판 (처음부터 다시 하지 못하고 이어서만 할 수 있다)
+  const [resume, setResume] = useState<{ session: DailyStartResponse; done: RoundResult[] } | null>(null);
+  const [initialResults, setInitialResults] = useState<RoundResult[] | undefined>(undefined);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [results, setResults] = useState<RoundResult[]>([]);
@@ -81,20 +117,42 @@ function DailyGame() {
 
   useEffect(() => {
     let cancelled = false;
-    getDailyInfo()
-      .then((data) => {
+    (async () => {
+      try {
+        const data = await getDailyInfo();
+        let done = loadDailyRecord(data.date);
+        let inProgress: { session: DailyStartResponse; done: RoundResult[] } | null = null;
+        // 오늘 시작한 판이 있으면 서버에서 진행 상황을 받아 이어서 하게 한다
+        const savedId = done ? null : loadDailySession(data.date);
+        if (savedId) {
+          try {
+            const s = await getDailySession(savedId);
+            if (s.result) {
+              done = toRecord(s.date, s.result);
+              saveDailyRecord(done);
+              clearDailySession(data.date);
+            } else {
+              const { sessionId, date, rounds, settings } = s;
+              inProgress = { session: { sessionId, date, rounds, settings }, done: toResults(s.answered) };
+            }
+          } catch {
+            // 서버가 재시작돼 판이 사라진 경우 등: 새로 시작할 수 있게 둔다
+            clearDailySession(data.date);
+          }
+        }
         if (cancelled) return;
         setInfo(data);
         setPlayers(data.players);
-        setRecord(loadDailyRecord(data.date));
+        setRecord(done);
+        setResume(inProgress);
         setScreen("landing");
         void loadBoard(data.date);
-      })
-      .catch((err) => {
+      } catch (err) {
         if (cancelled) return;
         setLoadError(err instanceof Error ? err.message : "오늘의 문제를 불러오지 못했어요.");
         setScreen("error");
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -105,13 +163,40 @@ function DailyGame() {
     () =>
       session && {
         total: session.rounds,
-        start: (round) => startDailyRound(session.sessionId, round),
+        start: async (round) => {
+          const res = await startDailyRound(session.sessionId, round);
+          return {
+            panoId: res.panoId,
+            remainingSec: res.deadline === null ? undefined : (res.deadline - res.serverNow) / 1000,
+          };
+        },
         guess: (round, guess) => guessDaily(session.sessionId, round, { guess }),
       },
     [session]
   );
 
   const nicknameError = validateNickname(nickname);
+
+  const finish = useCallback(
+    async (sess: DailyStartResponse, finalResults: RoundResult[], player: Profile) => {
+      setSubmitState("submitting");
+      try {
+        const res = await finishDaily(sess.sessionId, { player: { nickname: player.nickname, avatar: player.avatar } });
+        const next = toRecord(sess.date, res);
+        saveDailyRecord(next);
+        clearDailySession(sess.date);
+        setRecord(next);
+        setPlayers(res.players);
+        setResults(finalResults.map((r, i) => ({ ...r, score: res.rounds[i]?.score ?? r.score })));
+        setSubmitState("done");
+        void loadBoard(sess.date);
+      } catch (err) {
+        setSubmitError(err instanceof Error ? err.message : "결과를 저장하지 못했어요.");
+        setSubmitState("error");
+      }
+    },
+    [loadBoard]
+  );
 
   const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,10 +205,27 @@ function DailyGame() {
     const next = { nickname: nickname.trim(), avatar };
     saveProfile(next);
     setProfile(next);
+
+    // 하던 판이 있으면 끝낸 라운드 다음부터 이어서 (다 풀었으면 결과만 남긴다)
+    if (resume) {
+      setSession(resume.session);
+      if (resume.done.length >= resume.session.rounds) {
+        setResults(resume.done);
+        setScreen("finished");
+        void finish(resume.session, resume.done, next);
+      } else {
+        setInitialResults(resume.done);
+        setScreen("playing");
+      }
+      return;
+    }
+
     setStarting(true);
     setStartError(null);
     try {
-      setSession(await startDaily());
+      const started = await startDaily();
+      saveDailySession(started.date, started.sessionId);
+      setSession(started);
       setScreen("playing");
     } catch (err) {
       setStartError(err instanceof Error ? err.message : "오늘의 문제를 시작하지 못했어요.");
@@ -131,33 +233,6 @@ function DailyGame() {
       setStarting(false);
     }
   };
-
-  const finish = useCallback(
-    async (finalResults: RoundResult[], player: Profile) => {
-      if (!session) return;
-      setSubmitState("submitting");
-      try {
-        const res = await finishDaily(session.sessionId, { player: { nickname: player.nickname, avatar: player.avatar } });
-        const next: DailyRecord = {
-          date: session.date,
-          resultId: res.resultId,
-          totalScore: res.totalScore,
-          rounds: res.rounds.map((r) => r.score),
-          rank: res.rank,
-        };
-        saveDailyRecord(next);
-        setRecord(next);
-        setPlayers(res.players);
-        setResults(finalResults.map((r, i) => ({ ...r, score: res.rounds[i]?.score ?? r.score })));
-        setSubmitState("done");
-        void loadBoard(session.date);
-      } catch (err) {
-        setSubmitError(err instanceof Error ? err.message : "결과를 저장하지 못했어요.");
-        setSubmitState("error");
-      }
-    },
-    [session, loadBoard]
-  );
 
   const share = async (r: DailyRecord) => {
     const result = await shareDaily(dailyShareText(r.date, r.rounds, r.totalScore), `${window.location.origin}/daily`);
@@ -204,10 +279,11 @@ function DailyGame() {
         profile={profile}
         settings={session.settings}
         server={server}
+        initialResults={initialResults}
         onFinish={(r) => {
           setResults(r);
           setScreen("finished");
-          void finish(r, profile);
+          void finish(session, r, profile);
         }}
       />
     );
@@ -256,7 +332,7 @@ function DailyGame() {
               <div className="py-3 text-center">
                 <p className="text-sm text-red-600">{submitError}</p>
                 <button
-                  onClick={() => void finish(results, profile)}
+                  onClick={() => session && void finish(session, results, profile)}
                   className="mt-2 rounded-lg bg-gray-100 px-4 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-200"
                 >
                   다시 저장
@@ -316,12 +392,25 @@ function DailyGame() {
             />
             {touched && nicknameError && <p className="mt-1 text-xs text-red-300">{nicknameError}</p>}
             {startError && <p className="mt-2 text-center text-xs text-red-300">{startError}</p>}
+            {resume && (
+              <p className="mt-3 text-center text-xs text-amber-200">
+                하던 도전이 있어요 ({Math.min(resume.done.length, resume.session.rounds)}/{resume.session.rounds} 라운드 완료). 이어서 풀어주세요
+              </p>
+            )}
             <button
               type="submit"
               disabled={!sdk.ready || starting}
               className="mt-4 w-full rounded-full bg-gradient-to-b from-lime-400 to-green-600 py-3 font-bold italic text-white shadow-lg transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:from-gray-500 disabled:to-gray-600"
             >
-              {starting ? "준비 중..." : sdk.ready ? "도전하기" : sdk.error ? "카카오맵을 불러오지 못했어요" : "카카오맵 불러오는 중..."}
+              {starting
+                ? "준비 중..."
+                : sdk.ready
+                  ? resume
+                    ? "이어서 하기"
+                    : "도전하기"
+                  : sdk.error
+                    ? "카카오맵을 불러오지 못했어요"
+                    : "카카오맵 불러오는 중..."}
             </button>
           </form>
         )}

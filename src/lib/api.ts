@@ -45,6 +45,7 @@ import type {
   DailyInfoResponse,
   DailyLeaderboardResponse,
   DailyRoundStartResponse,
+  DailySessionResponse,
   DailyStartResponse,
 } from "./daily-api-types";
 
@@ -220,6 +221,11 @@ export function getDailyInfo() {
 
 export function startDaily() {
   return request<DailyStartResponse>("/daily/start", { method: "POST", body: "{}" });
+}
+
+// 새로고침 뒤 이어서 하기
+export function getDailySession(sessionId: string) {
+  return request<DailySessionResponse>(`/daily/${encodeURIComponent(sessionId)}`);
 }
 
 export function startDailyRound(sessionId: string, round: number) {

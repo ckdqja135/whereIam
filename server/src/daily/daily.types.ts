@@ -25,6 +25,22 @@ export interface DailyStartResponse {
   settings: GameSettings;
 }
 
+// GET /daily/:sessionId — 새로고침 뒤 이어서 하기. 답한 라운드는 결과까지, 안 답한 라운드는 null
+export interface DailyRoundRecord {
+  guess: Guess;
+  score: number;
+  distanceKm: number | null;
+  answer: { lat: number; lng: number };
+}
+export interface DailySessionResponse {
+  sessionId: string;
+  date: string;
+  rounds: number;
+  settings: GameSettings;
+  answered: (DailyRoundRecord | null)[];
+  result: DailyFinishResponse | null; // 결과를 이미 남겼으면 그 결과
+}
+
 // POST /daily/:sessionId/rounds/:round/start — 라운드 시작 (앞 라운드에 답해야 다음 라운드를 열 수 있다)
 export interface DailyRoundStartResponse {
   panoId: number;

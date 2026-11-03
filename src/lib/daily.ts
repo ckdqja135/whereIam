@@ -64,6 +64,7 @@ export interface DailyRecord {
 }
 
 const key = (date: string) => `whereiam:daily:${date}`;
+const sessionKey = (date: string) => `whereiam:daily-session:${date}`;
 
 export function loadDailyRecord(date: string): DailyRecord | null {
   try {
@@ -81,5 +82,30 @@ export function saveDailyRecord(record: DailyRecord): void {
     localStorage.setItem(key(record.date), JSON.stringify(record));
   } catch {
     // 무시 (사생활 보호 모드 등)
+  }
+}
+
+// 시작했지만 아직 결과를 남기지 않은 판 (새로고침해도 처음부터 다시 하지 못하고 이어서 하도록)
+export function loadDailySession(date: string): string | null {
+  try {
+    return localStorage.getItem(sessionKey(date));
+  } catch {
+    return null;
+  }
+}
+
+export function saveDailySession(date: string, sessionId: string): void {
+  try {
+    localStorage.setItem(sessionKey(date), sessionId);
+  } catch {
+    // 무시
+  }
+}
+
+export function clearDailySession(date: string): void {
+  try {
+    localStorage.removeItem(sessionKey(date));
+  } catch {
+    // 무시
   }
 }

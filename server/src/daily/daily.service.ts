@@ -10,6 +10,7 @@ import type {
   DailyInfoResponse,
   DailyLeaderboardResponse,
   DailyRoundStartResponse,
+  DailySessionResponse,
   DailyStartResponse,
 } from './daily.types';
 
@@ -25,8 +26,9 @@ export const DAILY_SETTINGS: GameSettings = {
 };
 // 제한 시간이 지난 뒤에도 이만큼은 받아준다 (네트워크 지연)
 const GRACE_MS = 5_000;
-// 한 판은 메모리에만 둔다 (재시작하면 사라짐). 2시간 지나면 만료, 동시에 보관하는 수 상한
-const SESSION_TTL_MS = 2 * 60 * 60_000;
+// 한 판은 메모리에만 둔다 (재시작하면 사라짐). 같은 5곳이 하루 종일 나오므로, 새로고침 뒤 처음부터 다시 하지 못하게
+// 하루 넘게(26시간) 기억한다. 동시에 보관하는 수 상한
+const SESSION_TTL_MS = 26 * 60 * 60_000;
 const MAX_SESSIONS = 5000;
 const LEADERBOARD_LIMIT = 50;
 const KST_OFFSET_MS = 9 * 60 * 60_000;
@@ -37,7 +39,8 @@ interface DailySession {
   locations: ChallengeLocation[];
   startedAt: (number | null)[]; // 라운드를 연 시각
   scores: (RoundScore | null)[]; // 답한 라운드의 점수
-  finished: boolean;
+  guesses: Guess[]; // 답한 라운드의 위치 (늦게 내서 0점 처리된 것은 null)
+  result: DailyFinishResponse | null; // 결과를 남겼으면 그 결과 (한 번만)
   expiresAt: number;
 }
 
@@ -94,10 +97,33 @@ export class DailyService {
       locations,
       startedAt: locations.map(() => null),
       scores: locations.map(() => null),
-      finished: false,
+      guesses: locations.map(() => null),
+      result: null,
       expiresAt: now + SESSION_TTL_MS,
     });
     return { sessionId, date, rounds: locations.length, settings: { ...DAILY_SETTINGS } };
+  }
+
+  // 새로고침 뒤 이어서 하기: 답한 라운드의 결과(정답 좌표 포함)와 남긴 결과. 안 답한 라운드의 위치는 알려주지 않는다
+  session(sessionId: string): DailySessionResponse {
+    const session = this.getSession(sessionId);
+    return {
+      sessionId,
+      date: session.date,
+      rounds: session.locations.length,
+      settings: { ...DAILY_SETTINGS },
+      answered: session.scores.map((s, i) =>
+        s === null
+          ? null
+          : {
+              guess: session.guesses[i],
+              score: s.score,
+              distanceKm: s.distanceKm,
+              answer: { lat: session.locations[i].lat, lng: session.locations[i].lng },
+            },
+      ),
+      result: session.result,
+    };
   }
 
   // 라운드를 연다. 앞 라운드에 모두 답해야 하고, 같은 라운드를 다시 열면 처음 연 시각 그대로 (제한 시간을 늘릴 수 없음)
@@ -126,15 +152,17 @@ export class DailyService {
     const { timeLimit } = DAILY_SETTINGS;
     const late = timeLimit > 0 && Date.now() > started + timeLimit * 1000 + GRACE_MS;
     const location = session.locations[i];
-    const [scored] = scoreGuesses([location], [late ? null : guess]).rounds;
+    const counted = late ? null : guess;
+    const [scored] = scoreGuesses([location], [counted]).rounds;
     session.scores[i] = scored;
+    session.guesses[i] = counted;
     return { score: scored.score, distanceKm: scored.distanceKm, answer: { lat: location.lat, lng: location.lng }, late };
   }
 
   // 5라운드를 모두 마친 판만, 한 번만 순위에 남긴다
   finish(sessionId: string, player: PlayerInfo): DailyFinishResponse {
     const session = this.getSession(sessionId);
-    if (session.finished) throw new ConflictException('이미 결과를 남겼어요');
+    if (session.result) throw new ConflictException('이미 결과를 남겼어요');
     if (session.scores.some((s) => s === null)) throw new ConflictException('모든 라운드를 풀어야 결과를 남길 수 있어요');
     const rounds = session.scores as RoundScore[];
     const totalScore = rounds.reduce((sum, r) => sum + r.score, 0);
@@ -147,13 +175,13 @@ export class DailyService {
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(resultId, session.date, player.nickname, JSON.stringify(avatar), JSON.stringify(rounds), totalScore, new Date().toISOString());
-    session.finished = true;
 
     // 같은 점수면 먼저 남긴 사람이 앞 (챌린지와 같은 규칙)
     const { cnt } = this.db
       .prepare('SELECT COUNT(*) AS cnt FROM daily_results WHERE date = ? AND total_score >= ? AND id != ?')
       .get(session.date, totalScore, resultId) as { cnt: number };
-    return { resultId, totalScore, rounds, rank: cnt + 1, players: this.playerCount(session.date) };
+    session.result = { resultId, totalScore, rounds, rank: cnt + 1, players: this.playerCount(session.date) };
+    return session.result;
   }
 
   leaderboard(date: string): DailyLeaderboardResponse {

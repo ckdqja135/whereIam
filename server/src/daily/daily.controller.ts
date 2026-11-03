@@ -8,6 +8,7 @@ import type {
   DailyInfoResponse,
   DailyLeaderboardResponse,
   DailyRoundStartResponse,
+  DailySessionResponse,
   DailyStartResponse,
 } from './daily.types';
 
@@ -29,6 +30,12 @@ export class DailyController {
   @Throttle(START_THROTTLE)
   start(): DailyStartResponse {
     return this.daily.start();
+  }
+
+  // 새로고침 뒤 이어서 하기
+  @Get(':sessionId')
+  session(@Param('sessionId') sessionId: string): DailySessionResponse {
+    return this.daily.session(sessionId);
   }
 
   @Post(':sessionId/rounds/:round/start')
