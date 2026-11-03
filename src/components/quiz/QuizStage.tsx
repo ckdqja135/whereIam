@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { Check, Flag, X } from "lucide-react";
 import { flagStation } from "@/lib/api";
 import type { Avatar } from "@/lib/avatar";
 import type { QuizKind, QuizLevel } from "@/lib/quiz";
@@ -136,9 +137,10 @@ export default function QuizStage({
                 <button
                   type="button"
                   onClick={flag}
-                  className="rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-white/90 hover:bg-black/75"
+                  className="flex items-center gap-1 rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-white/90 hover:bg-black/75"
                 >
-                  🚩 사진에 역 이름이 보였어요
+                  <Flag className="h-3 w-3" aria-hidden />
+                  사진에 역 이름이 보였어요
                 </button>
               )}
             </div>
@@ -177,7 +179,13 @@ export default function QuizStage({
                       isAnswer || isMineWrong || isMine ? "bg-white/25" : "bg-gray-900 text-white"
                     }`}
                   >
-                    {isAnswer ? "✓" : isMineWrong ? "✕" : MARKS[i]}
+                    {isAnswer ? (
+                      <Check className="h-4 w-4" aria-label="정답" />
+                    ) : isMineWrong ? (
+                      <X className="h-4 w-4" aria-label="내가 고른 오답" />
+                    ) : (
+                      MARKS[i]
+                    )}
                   </span>
                   <span className="min-w-0 flex-1 break-keep leading-tight">{c}</span>
                   {people.length > 0 && (

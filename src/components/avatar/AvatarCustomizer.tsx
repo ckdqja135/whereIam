@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Dices } from "lucide-react";
 import {
   Avatar,
   cycleAvatar,
@@ -45,8 +46,13 @@ export default function AvatarCustomizer({ avatar, onChange, dark }: AvatarCusto
       <AvatarViewer avatar={avatar} className="h-64 w-56" />
 
       <div className="mt-1 flex gap-2">
-        <button type="button" onClick={() => onChange(randomAvatar())} className={`rounded-full px-4 py-1 text-sm font-semibold ${pill}`}>
-          🎲 캐릭터 변경
+        <button
+          type="button"
+          onClick={() => onChange(randomAvatar())}
+          className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1 text-sm font-semibold ${pill}`}
+        >
+          <Dices className="h-4 w-4" aria-hidden />
+          캐릭터 변경
         </button>
         <button
           type="button"

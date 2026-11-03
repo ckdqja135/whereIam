@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, X } from "lucide-react";
 import type { Profile } from "@/lib/profile";
 import type { QuizKind } from "@/lib/quiz";
 import { QUIZ_TEXT, quizMaxTotal } from "@/lib/quiz";
@@ -44,7 +45,7 @@ export default function QuizResultScreen({ kind, profile, results, total, onPlay
           {results.map((r, i) => (
             <li key={i} className="flex items-center gap-3 py-2.5 text-sm">
               <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${r.correct ? "bg-emerald-500" : "bg-red-500"}`}>
-                {r.correct ? "✓" : "✕"}
+                {r.correct ? <Check className="h-3.5 w-3.5" aria-label="정답" /> : <X className="h-3.5 w-3.5" aria-label="오답" />}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-gray-900">{r.question.choices[r.answer]}</p>

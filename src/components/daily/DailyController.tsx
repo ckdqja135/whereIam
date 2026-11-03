@@ -2,12 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { CalendarDays } from "lucide-react";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useKakaoSdk } from "@/lib/use-kakao-sdk";
 import { finishDaily, getDailyInfo, getDailyLeaderboard, guessDaily, startDaily, startDailyRound } from "@/lib/api";
 import type { LeaderboardEntry } from "@/lib/api-types";
 import type { DailyInfoResponse, DailyStartResponse } from "@/lib/daily-api-types";
-import { dailyLabel, dailyShareText, DailyRecord, loadDailyRecord, roundEmoji, saveDailyRecord, shareDaily } from "@/lib/daily";
+import {
+  dailyLabel,
+  dailyShareText,
+  DailyRecord,
+  loadDailyRecord,
+  roundGrade,
+  RoundGrade,
+  saveDailyRecord,
+  shareDaily,
+} from "@/lib/daily";
 import { randomAvatar } from "@/lib/avatar";
 import { loadProfile, NICKNAME_MAX, Profile, saveProfile, validateNickname } from "@/lib/profile";
 import type { RoundResult } from "@/lib/game";
@@ -265,7 +275,10 @@ function DailyGame() {
     <div className="h-dvh overflow-y-auto bg-gradient-to-b from-indigo-950 via-[#241a46] to-gray-900 px-4 py-10 text-white">
       <div className="mx-auto flex max-w-md flex-col items-center">
         <p className="text-sm font-semibold tracking-widest text-indigo-200">WHERE I AM</p>
-        <h1 className="mt-1 text-3xl font-extrabold italic tracking-tight sm:text-4xl">📅 오늘의 문제</h1>
+        <h1 className="mt-1 flex items-center gap-2 text-3xl font-extrabold italic tracking-tight sm:text-4xl">
+          <CalendarDays className="h-8 w-8 not-italic" aria-hidden />
+          오늘의 문제
+        </h1>
         <p className="mt-2 text-lg font-bold">{dailyLabel(info.date)}</p>
         <p className="mt-1 text-sm text-white/70">
           모두 같은 5곳, 하루 한 번 도전! {players > 0 && `오늘 ${players}명 도전`}
@@ -275,7 +288,7 @@ function DailyGame() {
           <div className="mt-8 w-full rounded-2xl bg-white/10 p-6 text-center">
             <p className="text-sm text-white/70">오늘은 이미 도전했어요</p>
             <p className="mt-2 text-4xl font-extrabold tabular-nums text-yellow-300">{record.totalScore.toLocaleString()}점</p>
-            <p className="mt-2 text-2xl tracking-widest">{record.rounds.map(roundEmoji).join("")}</p>
+            <ScoreSquares scores={record.rounds} />
             <p className="mt-2 text-sm text-white/80">
               {players}명 중 {record.rank}위
             </p>
@@ -329,6 +342,21 @@ function DailyGame() {
           메인으로
         </Link>
       </div>
+    </div>
+  );
+}
+
+// 라운드별 점수 칸 (공유 문구의 🟩🟨🟧🟥 와 같은 기준)
+const GRADE_COLOR: Record<RoundGrade, string> = { great: "#22c55e", good: "#eab308", ok: "#f97316", bad: "#ef4444" };
+
+function ScoreSquares({ scores }: { scores: number[] }) {
+  return (
+    <div className="mt-3 flex justify-center gap-1.5" aria-label={`라운드 점수 ${scores.join(", ")}`}>
+      {scores.map((score, i) => (
+        <svg key={i} width="26" height="26" viewBox="0 0 26 26" aria-hidden>
+          <rect width="26" height="26" rx="5" fill={GRADE_COLOR[roundGrade(score)]} />
+        </svg>
+      ))}
     </div>
   );
 }

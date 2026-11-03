@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Crown, Hand, Megaphone, MessageCircle, User, X } from "lucide-react";
 import { roomActions } from "@/lib/api";
 import { ROOM_CHAT_MAX_LENGTH, ROOM_SYSTEM_PLAYER_ID, RoomChatMessage, RoomState } from "@/lib/room-types";
 import { normalizeAvatar } from "@/lib/avatar";
@@ -194,21 +195,24 @@ export default function RoomChat({ code, token, state, onState, defaultOpen = fa
               <p className="text-base font-bold text-gray-900">대결방 {code}</p>
               <span className="text-base text-gray-600">{memberCount}</span>
             </div>
-            <button onClick={toggle} aria-label="채팅 닫기" className="p-1 text-xl leading-none text-gray-700 hover:text-gray-900 sm:p-0 sm:text-lg">
-              ✕
+            <button onClick={toggle} aria-label="채팅 닫기" className="p-1 text-gray-700 hover:text-gray-900 sm:p-0">
+              <X className="h-5 w-5" aria-hidden />
             </button>
           </div>
 
           {/* 공지 */}
           <div className="mx-2 mt-2 flex items-center gap-2 rounded-lg bg-white/95 px-3 py-2 text-xs text-gray-800 shadow-sm">
-            <span>📢</span>
+            <Megaphone className="h-3.5 w-3.5 shrink-0 text-gray-600" aria-hidden />
             <span className="truncate">환영합니다! 같은 문제로 겨루는 대결방이에요.</span>
           </div>
 
           {/* 메시지 목록 */}
           <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-3">
             {rows.length === 0 && (
-              <p className="py-10 text-center text-xs text-gray-600">첫 메시지를 보내보세요 👋</p>
+              <p className="flex items-center justify-center gap-1 py-10 text-xs text-gray-600">
+                첫 메시지를 보내보세요
+                <Hand className="h-3.5 w-3.5" aria-hidden />
+              </p>
             )}
             {rows.map(({ message: m, mine, showSender, showTime }) => {
               const time = showTime && (
@@ -244,14 +248,16 @@ export default function RoomChat({ code, token, state, onState, defaultOpen = fa
                       (player ? (
                         <AvatarPin avatar={normalizeAvatar(player.avatar)} size={36} />
                       ) : (
-                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-300 text-sm">👤</span>
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-300 text-gray-600">
+                          <User className="h-5 w-5" aria-hidden />
+                        </span>
                       ))}
                   </div>
                   <div className="flex min-w-0 flex-col items-start">
                     {showSender && (
-                      <span className="mb-1 text-xs text-gray-700">
+                      <span className="mb-1 flex items-center gap-1 text-xs text-gray-700">
                         {m.nickname}
-                        {player?.id === state.hostId && " 👑"}
+                        {player?.id === state.hostId && <Crown className="h-3 w-3 text-amber-500" aria-label="방장" />}
                       </span>
                     )}
                     <div className="flex items-end gap-1.5">
@@ -299,9 +305,9 @@ export default function RoomChat({ code, token, state, onState, defaultOpen = fa
       <button
         onClick={toggle}
         aria-label={open ? "채팅 닫기" : "채팅 열기"}
-        className={`pointer-events-auto relative h-12 w-12 items-center justify-center rounded-full bg-[#fee500] text-xl shadow-lg hover:brightness-95 ${open ? "hidden sm:flex" : "flex"}`}
+        className={`pointer-events-auto relative h-12 w-12 items-center justify-center rounded-full bg-[#fee500] text-gray-900 shadow-lg hover:brightness-95 ${open ? "hidden sm:flex" : "flex"}`}
       >
-        💬
+        <MessageCircle className="h-6 w-6" aria-hidden />
         {!open && unread > 0 && (
           <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white">
             {unread > 9 ? "9+" : unread}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ArrowRight, ChevronDown, ChevronUp, Swords } from "lucide-react";
 import type { RoomAttackType, RoomPlayer } from "@/lib/room-types";
 import { ROOM_ATTACKS_PER_ROUND } from "@/lib/room-types";
 import { ATTACKS, attackDef } from "@/lib/attacks";
@@ -40,10 +41,13 @@ export default function AttackPanel({ attacksLeft, targets, busy, message, onAtt
         aria-expanded={expanded}
         className="flex w-full items-center justify-between gap-2 px-1 text-left text-[11px] font-semibold text-white/80 sm:pointer-events-none"
       >
-        <span>
-          ⚔️ 방해 · 이번 라운드 <span className="text-yellow-300">{attacksLeft}</span>/{ROOM_ATTACKS_PER_ROUND}
+        <span className="flex items-center gap-1">
+          <Swords className="h-3.5 w-3.5" aria-hidden />
+          방해 · 이번 라운드 <span className="text-yellow-300">{attacksLeft}</span>/{ROOM_ATTACKS_PER_ROUND}
         </span>
-        <span className="sm:hidden">{expanded ? "▲" : "▼"}</span>
+        <span className="sm:hidden">
+          {expanded ? <ChevronUp className="h-3.5 w-3.5" aria-hidden /> : <ChevronDown className="h-3.5 w-3.5" aria-hidden />}
+        </span>
       </button>
 
       <div className={`mt-1.5 ${expanded ? "block" : "hidden sm:block"}`}>
@@ -55,11 +59,12 @@ export default function AttackPanel({ attacksLeft, targets, busy, message, onAtt
               disabled={disabledAll}
               title={a.description}
               aria-pressed={picking === a.type}
-              className={`rounded-md px-2 py-1.5 text-left text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 picking === a.type ? "bg-yellow-400 text-gray-900" : "bg-white/10 hover:bg-white/20"
               }`}
             >
-              {a.emoji} {a.name}
+              <a.icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              {a.name}
             </button>
           ))}
         </div>
@@ -67,7 +72,10 @@ export default function AttackPanel({ attacksLeft, targets, busy, message, onAtt
         {/* 대상 고르기 (상대가 여러 명일 때) */}
         {picking && targets.length > 1 && (
           <div className="mt-1.5 rounded-md bg-black/40 p-1.5">
-            <p className="px-1 pb-1 text-[11px] text-white/70">{attackDef(picking).emoji} 누구에게 쓸까요?</p>
+            <p className="flex items-center gap-1 px-1 pb-1 text-[11px] text-white/70">
+              <PickingIcon type={picking} />
+              누구에게 쓸까요?
+            </p>
             <div className="flex flex-col gap-1">
               {targets.map((t) => (
                 <button
@@ -92,6 +100,25 @@ export default function AttackPanel({ attacksLeft, targets, busy, message, onAtt
         )}
         {message && <p className="mt-1.5 px-1 text-[11px] text-red-300">{message}</p>}
       </div>
+    </div>
+  );
+}
+
+function PickingIcon({ type }: { type: RoomAttackType }) {
+  const Icon = attackDef(type).icon;
+  return <Icon className="h-3 w-3" aria-hidden />;
+}
+
+// 방해 아이템 알림 (모두에게): "철수 → 영희 [아이콘] 먹물!"
+export function AttackNotice({ from, to, type }: { from: string; to: string; type: RoomAttackType }) {
+  const def = attackDef(type);
+  return (
+    <div className="flex items-center gap-1 rounded-full bg-black/75 px-3 py-1 text-xs font-semibold text-white shadow">
+      {from}
+      <ArrowRight className="h-3 w-3" aria-hidden />
+      {to}
+      <def.icon className="ml-0.5 h-3.5 w-3.5" aria-hidden />
+      {def.name}!
     </div>
   );
 }

@@ -10,12 +10,21 @@ export function dailyLabel(date: string): string {
   return `${m}월 ${d}일 (${weekday})`;
 }
 
-// 라운드 점수 → 공유용 칸 (5000점 만점. 대략 🟩 16km 안, 🟨 50km 안, 🟧 120km 안)
+// 라운드 점수 등급 (5000점 만점. 대략 great 16km 안, good 50km 안, ok 120km 안)
+export type RoundGrade = "great" | "good" | "ok" | "bad";
+
+export function roundGrade(score: number): RoundGrade {
+  if (score >= 4000) return "great";
+  if (score >= 2500) return "good";
+  if (score >= 1000) return "ok";
+  return "bad";
+}
+
+// 공유 문구는 카카오톡·디스코드에 붙여넣는 글자라 칸 모양 이모지를 쓴다 (화면은 SVG 칸)
+const GRADE_EMOJI: Record<RoundGrade, string> = { great: "🟩", good: "🟨", ok: "🟧", bad: "🟥" };
+
 export function roundEmoji(score: number): string {
-  if (score >= 4000) return "🟩";
-  if (score >= 2500) return "🟨";
-  if (score >= 1000) return "🟧";
-  return "🟥";
+  return GRADE_EMOJI[roundGrade(score)];
 }
 
 export function dailyShareText(date: string, roundScores: number[], total: number): string {

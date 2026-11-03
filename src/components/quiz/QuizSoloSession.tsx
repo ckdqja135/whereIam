@@ -31,6 +31,7 @@ const LOAD_FALLBACK_MS = 2500;
 // 혼자 하는 4지선다 퀴즈 (지역 / 지하철역). 문제는 서버의 문제 풀에서 오고, 채점도 서버가 한다 (브라우저는 정답을 모른다).
 export default function QuizSoloSession({ kind, profile, onFinish }: QuizSoloSessionProps) {
   const seconds = QUIZ_RULES[kind].seconds;
+  const KindIcon = QUIZ_TEXT[kind].icon;
   const [session, setSession] = useState<{ id: string; questions: QuizPublicQuestion[] } | null>(null);
   const [preparing, setPreparing] = useState<{ total: number; minimum: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -178,7 +179,7 @@ export default function QuizSoloSession({ kind, profile, onFinish }: QuizSoloSes
   if (!session || !question) {
     return (
       <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-gray-900 px-4 text-white">
-        <p className="text-4xl">{QUIZ_TEXT[kind].emoji}</p>
+        <KindIcon className="h-10 w-10 text-white/80" aria-hidden />
         <p className="text-lg font-bold">{preparing ? "문제를 모으는 중이에요" : "문제를 불러오는 중이에요"}</p>
         {preparing && (
           <>

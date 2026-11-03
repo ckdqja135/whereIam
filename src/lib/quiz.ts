@@ -1,4 +1,5 @@
 // 4지선다 퀴즈 규칙. 서버 server/src/rooms/quiz.ts 와 반드시 같게 유지할 것 (QUIZ_TEXT 화면 문구는 프론트 전용).
+import { CircleHelp, TrainFront, type LucideIcon } from "lucide-react";
 import type { GameType } from "./api-types";
 import type { QuizLevel } from "./room-types";
 
@@ -52,8 +53,8 @@ export function quizMaxTotal(kind: QuizKind): number {
 // 화면 문구
 export const QUIZ_TEXT: Record<
   QuizKind,
-  { emoji: string; title: string; prompt: string; levelLabel: Record<QuizLevel, string> }
+  { icon: LucideIcon; title: string; prompt: string; levelLabel: Record<QuizLevel, string> }
 > = {
-  region: { emoji: "❓", title: "4지선다 퀴즈", prompt: "여기는 어디일까요?", levelLabel: { easy: "시·도", hard: "시·군·구" } },
-  station: { emoji: "🚇", title: "지하철역 퀴즈", prompt: "여기는 무슨 역일까요?", levelLabel: { easy: "같은 도시", hard: "이웃 역" } },
+  region: { icon: CircleHelp, title: "4지선다 퀴즈", prompt: "여기는 어디일까요?", levelLabel: { easy: "시·도", hard: "시·군·구" } },
+  station: { icon: TrainFront, title: "지하철역 퀴즈", prompt: "여기는 무슨 역일까요?", levelLabel: { easy: "같은 도시", hard: "이웃 역" } },
 };

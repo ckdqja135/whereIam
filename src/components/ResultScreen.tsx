@@ -8,7 +8,8 @@ import { getAvatarPin } from "@/lib/avatar-pin";
 import { avatarPinHtml, createAnswerMarker } from "@/lib/map-markers";
 import AvatarPin from "./avatar/AvatarPin";
 import { formatAddress } from "@/lib/address";
-import { itemDef } from "@/lib/items";
+import { MapPin } from "lucide-react";
+import { ItemIcons } from "./ItemPanel";
 
 interface ResultScreenProps {
   profile: Profile;
@@ -91,11 +92,14 @@ export default function ResultScreen({ profile, results, title = "게임 결과"
               </div>
               {r.penalty > 0 && (
                 <p className="mt-1 text-xs text-red-500">
-                  아이템 {r.items.map((id) => itemDef(id).emoji).join(" ")} -{r.penalty.toLocaleString()}점
+                  아이템 <ItemIcons ids={r.items} /> -{r.penalty.toLocaleString()}점
                 </p>
               )}
               {formatAddress(r.address) && (
-                <p className="mt-1 truncate text-xs text-gray-500">📍 {formatAddress(r.address)}</p>
+                <p className="mt-1 flex items-center gap-1 truncate text-xs text-gray-500">
+                  <MapPin className="h-3 w-3 shrink-0" aria-hidden />
+                  {formatAddress(r.address)}
+                </p>
               )}
             </li>
           ))}

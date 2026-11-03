@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { CalendarDays, ChevronRight, Users } from "lucide-react";
 import { NICKNAME_MAX, Profile, validateNickname } from "@/lib/profile";
 import { randomAvatar } from "@/lib/avatar";
 import type { GameSettings } from "@/lib/game-settings";
@@ -101,12 +102,12 @@ export default function LobbyScreen({
             href="/daily"
             className="mt-4 flex items-center gap-3 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-3 text-white shadow-md transition-transform hover:scale-[1.01]"
           >
-            <span className="text-2xl">📅</span>
+            <CalendarDays className="h-7 w-7 shrink-0" aria-hidden />
             <span className="flex-1">
               <span className="block text-sm font-extrabold">오늘의 문제</span>
               <span className="block text-xs text-white/90">모두 같은 5곳, 하루 한 번! 오늘의 순위에 도전</span>
             </span>
-            <span className="text-lg font-bold">→</span>
+            <ChevronRight className="h-5 w-5 shrink-0" aria-hidden />
           </Link>
         )}
 
@@ -147,7 +148,10 @@ export default function LobbyScreen({
         {/* 친구와 실시간 대결 */}
         {roomsAvailable && (
           <div className="mt-6 rounded-xl border border-indigo-100 bg-indigo-50 p-4">
-            <p className="text-sm font-semibold text-indigo-900">👥 친구와 실시간 대결 (2~4인)</p>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-indigo-900">
+              <Users className="h-4 w-4" aria-hidden />
+              친구와 실시간 대결 (2~4인)
+            </p>
             <p className="mt-1 text-xs text-indigo-700">같은 문제를 같은 설정으로 동시에 풀어요. 위에서 고른 게임 종류와 설정이 방 설정이 돼요.</p>
             <button
               type="button"

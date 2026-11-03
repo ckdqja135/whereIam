@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Crown, X } from "lucide-react";
 import { roomActions } from "@/lib/api";
 import { ROOM_MAX_PLAYERS, ROOM_MIN_PLAYERS, RoomState } from "@/lib/room-types";
 import type { ChallengeLocation } from "@/lib/api-types";
@@ -145,9 +146,9 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
               >
                 <AvatarPin avatar={normalizeAvatar(p.avatar)} size={40} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-gray-900">
-                    {host && "👑 "}
-                    {p.nickname}
+                  <p className="flex items-center gap-1 truncate text-sm font-bold text-gray-900">
+                    {host && <Crown className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="방장" />}
+                    <span className="truncate">{p.nickname}</span>
                   </p>
                   <p className={`text-xs ${host || p.ready ? "text-green-600" : "text-gray-400"}`}>
                     {!p.connected ? "연결 끊김" : host ? "방장" : p.ready ? "준비 완료" : "준비 중"}
@@ -175,7 +176,7 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
                       title="내보내기"
                       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm text-gray-400 hover:bg-red-50 hover:text-red-600"
                     >
-                      ✕
+                      <X className="h-4 w-4" aria-hidden />
                     </button>
                   )
                 )}

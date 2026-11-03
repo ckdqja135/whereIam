@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { MapPin, TriangleAlert } from "lucide-react";
+import { ItemIcons } from "../ItemPanel";
 import { roomActions } from "@/lib/api";
 import type { RoomState } from "@/lib/room-types";
 import { normalizeAvatar } from "@/lib/avatar";
 import { formatAddress, getAddress, AddressResult } from "@/lib/address";
-import { itemDef } from "@/lib/items";
 import AvatarPin from "../avatar/AvatarPin";
 import RoundRevealMap from "./RoundRevealMap";
 
@@ -82,8 +83,9 @@ export default function RoomReveal({ code, token, state, clockOffset, onState }:
         <p className="text-sm text-gray-500">
           라운드 {result.round}/{state.totalRounds} 결과
         </p>
-        <p className="mt-1 text-sm font-medium text-gray-800">
-          📍 {address === undefined ? "주소 확인 중..." : formatAddress(address) ?? "주소 정보 없음"}
+        <p className="mt-1 flex items-center gap-1 text-sm font-medium text-gray-800">
+          <MapPin className="h-4 w-4 shrink-0 text-red-500" aria-hidden />
+          {address === undefined ? "주소 확인 중..." : formatAddress(address) ?? "주소 정보 없음"}
         </p>
 
         <ol className="mt-4 divide-y divide-gray-100">
@@ -97,8 +99,12 @@ export default function RoomReveal({ code, token, state, clockOffset, onState }:
                   <p className="truncate text-sm font-semibold text-gray-900">
                     {p?.nickname ?? "?"}
                     {(p?.awayCount ?? 0) > 0 && (
-                      <span className="ml-1 text-xs font-normal text-amber-600" title="라운드 중 다른 탭/창으로 나간 횟수">
-                        ⚠️ 자리 비움 {p?.awayCount}회
+                      <span
+                        className="ml-1 inline-flex items-center gap-0.5 text-xs font-normal text-amber-600"
+                        title="라운드 중 다른 탭/창으로 나간 횟수"
+                      >
+                        <TriangleAlert className="h-3 w-3" aria-hidden />
+                        자리 비움 {p?.awayCount}회
                       </span>
                     )}
                   </p>
@@ -106,11 +112,14 @@ export default function RoomReveal({ code, token, state, clockOffset, onState }:
                     {formatKm(r.distanceKm)}
                     {r.penalty > 0 && (
                       <span className="ml-1 text-red-500">
-                        {r.items.map((id) => itemDef(id).emoji).join("")} -{r.penalty.toLocaleString()}
+                        <ItemIcons ids={r.items} /> -{r.penalty.toLocaleString()}
                       </span>
                     )}
                     {(r.awayPenalty ?? 0) > 0 && (
-                      <span className="ml-1 text-amber-600">⚠️ 자리 비움 -{r.awayPenalty!.toLocaleString()}</span>
+                      <span className="ml-1 inline-flex items-center gap-0.5 text-amber-600">
+                        <TriangleAlert className="h-3 w-3" aria-hidden />
+                        자리 비움 -{r.awayPenalty!.toLocaleString()}
+                      </span>
                     )}
                   </p>
                 </div>

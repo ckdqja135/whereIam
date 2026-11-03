@@ -7,7 +7,9 @@ import type { RoomState } from "@/lib/room-types";
 import { normalizeAvatar } from "@/lib/avatar";
 import { MAX_SCORE } from "@/lib/score";
 import { quizKindOf, quizMaxTotal } from "@/lib/quiz";
+import { TriangleAlert } from "lucide-react";
 import AvatarPin from "../avatar/AvatarPin";
+import RankBadge from "../RankBadge";
 
 interface RoomFinishedProps {
   code: string;
@@ -16,8 +18,6 @@ interface RoomFinishedProps {
   onState: (s: RoomState) => void;
   onLeave: () => void;
 }
-
-const MEDALS = ["🥇", "🥈", "🥉"];
 
 // 최종 순위. 방장은 같은 멤버로 한 판 더 할 수 있다.
 export default function RoomFinished({ code, token, state, onState, onLeave }: RoomFinishedProps) {
@@ -49,15 +49,21 @@ export default function RoomFinished({ code, token, state, onState, onLeave }: R
                 i === 0 ? "bg-yellow-400/20 ring-2 ring-yellow-300" : "bg-white/10"
               } ${p.id === state.me ? "outline outline-2 outline-blue-400" : ""}`}
             >
-              <span className="w-8 text-center text-2xl">{MEDALS[i] ?? i + 1}</span>
+              <span className="flex w-8 justify-center text-xl font-bold">
+                <RankBadge rank={i + 1} size={28} />
+              </span>
               <AvatarPin avatar={normalizeAvatar(p.avatar)} size={40} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-bold">
                   {p.nickname}
                   {p.left && <span className="ml-1 text-xs font-normal text-white/50">(나감)</span>}
                   {(p.awayCount ?? 0) > 0 && (
-                    <span className="ml-1 text-xs font-normal text-yellow-300" title="라운드 중 다른 탭/창으로 나간 횟수">
-                      ⚠️{p.awayCount}
+                    <span
+                      className="ml-1 inline-flex items-center gap-0.5 text-xs font-normal text-yellow-300"
+                      title="라운드 중 다른 탭/창으로 나간 횟수"
+                    >
+                      <TriangleAlert className="h-3 w-3" aria-hidden />
+                      {p.awayCount}
                     </span>
                   )}
                 </p>

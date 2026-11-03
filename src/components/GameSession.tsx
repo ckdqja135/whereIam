@@ -10,10 +10,11 @@ import type { Profile } from "@/lib/profile";
 import type { GameSettings } from "@/lib/game-settings";
 import type { ChallengeLocation, Guess } from "@/lib/api-types";
 import type { RoundResult } from "@/lib/game";
-import { ItemId, itemDef, roundPenalty } from "@/lib/items";
+import { ItemId, roundPenalty } from "@/lib/items";
 import { useRoundItems } from "@/lib/use-round-items";
 import { useAntiCheat } from "@/lib/use-anti-cheat";
-import { HintPanel, ItemPanel } from "./ItemPanel";
+import { ArrowRight, MapPin } from "lucide-react";
+import { HintPanel, ItemIcons, ItemPanel } from "./ItemPanel";
 import RoadviewPane, { RoadviewHandle } from "./RoadviewPane";
 import MapPane from "./MapPane";
 import AvatarPin from "./avatar/AvatarPin";
@@ -324,11 +325,12 @@ export default function GameSession({ profile, settings, locations, server, onFi
             </p>
             {roundItems.length > 0 && (
               <p className="mt-1 text-xs font-semibold text-red-500">
-                아이템 {roundItems.map((id) => itemDef(id).emoji).join(" ")} 사용 -{roundPenalty(roundItems).toLocaleString()}점
+                아이템 <ItemIcons ids={roundItems} /> 사용 -{roundPenalty(roundItems).toLocaleString()}점
               </p>
             )}
-            <p className="mt-2 max-w-xs text-sm font-medium text-gray-800">
-              📍 {roundAddress === undefined ? "주소 확인 중..." : formatAddress(roundAddress) ?? "주소 정보 없음"}
+            <p className="mt-2 flex max-w-xs items-center justify-center gap-1 text-sm font-medium text-gray-800">
+              <MapPin className="h-4 w-4 shrink-0 text-red-500" aria-hidden />
+              {roundAddress === undefined ? "주소 확인 중..." : formatAddress(roundAddress) ?? "주소 정보 없음"}
             </p>
           </div>
         )}
@@ -391,9 +393,10 @@ export default function GameSession({ profile, settings, locations, server, onFi
           {phase === "submitted" && (
             <button
               onClick={handleNextRound}
-              className="rounded-lg bg-green-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-green-700"
+              className="flex items-center gap-1.5 rounded-lg bg-green-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-green-700"
             >
-              {isLastRound ? "최종 결과 보기" : "다음 라운드"} &rarr;
+              {isLastRound ? "최종 결과 보기" : "다음 라운드"}
+              <ArrowRight className="h-4 w-4" aria-hidden />
             </button>
           )}
         </div>

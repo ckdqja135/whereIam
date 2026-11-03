@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import type { RoomAttack } from "@/lib/room-types";
+import { Snowflake } from "lucide-react";
+import type { RoomAttack, RoomAttackType } from "@/lib/room-types";
 import { attackDef } from "@/lib/attacks";
 
 // 같은 공격은 매번 같은 모양이 나오도록 id 로 시드를 고정한 난수
@@ -104,7 +105,7 @@ export default function AttackEffects({ effects, serverNow, nicknameOf }: Attack
       {freeze && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-cyan-200/25 shadow-[inset_0_0_120px_30px_rgba(165,243,252,0.9)] backdrop-blur-[2px]">
           <div className="rounded-2xl bg-white/85 px-6 py-4 text-center shadow-xl">
-            <p className="text-4xl">🧊</p>
+            <Snowflake className="mx-auto h-10 w-10 text-cyan-500" aria-hidden />
             <p className="mt-1 font-bold text-cyan-900">꽁꽁 얼었어요!</p>
             <p className="text-sm tabular-nums text-cyan-800">{Math.max(1, Math.ceil((freeze.until - serverNow) / 1000))}초 뒤에 풀려요</p>
           </div>
@@ -112,10 +113,18 @@ export default function AttackEffects({ effects, serverNow, nicknameOf }: Attack
       )}
 
       {/* 누가 공격했는지 */}
-      <div className="pointer-events-none absolute left-1/2 top-16 z-30 -translate-x-1/2 animate-bounce rounded-full bg-red-600 px-4 py-2 text-sm font-bold text-white shadow-lg sm:top-20">
-        {attackDef(latest.type).emoji} {nicknameOf(latest.fromId)}
-        {attackDef(latest.type).hitText}
+      <div className="pointer-events-none absolute left-1/2 top-16 z-30 flex -translate-x-1/2 animate-bounce items-center gap-1.5 rounded-full bg-red-600 px-4 py-2 text-sm font-bold text-white shadow-lg sm:top-20">
+        <LatestIcon type={latest.type} />
+        <span>
+          {nicknameOf(latest.fromId)}
+          {attackDef(latest.type).hitText}
+        </span>
       </div>
     </>
   );
+}
+
+function LatestIcon({ type }: { type: RoomAttackType }) {
+  const Icon = attackDef(type).icon;
+  return <Icon className="h-4 w-4" aria-hidden />;
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ITEMS, ItemId, MAX_ITEMS_PER_GAME } from "@/lib/items";
+import { Check, ChevronDown, ChevronUp, Gift, Map as MapIcon, School, Target } from "lucide-react";
+import { ITEMS, ItemId, itemDef, MAX_ITEMS_PER_GAME } from "@/lib/items";
 import type { RoundHints } from "@/lib/use-round-items";
 
 interface ItemPanelProps {
@@ -25,10 +26,13 @@ export function ItemPanel({ itemsLeft, roundItems, busy, message, disabled, onUs
         aria-expanded={expanded}
         className="flex w-full items-center justify-between gap-2 px-1 text-left text-[11px] font-semibold text-white/70 sm:pointer-events-none"
       >
-        <span>
-          🎁 아이템 · 남은 횟수 <span className="text-yellow-300">{itemsLeft}</span>/{MAX_ITEMS_PER_GAME}
+        <span className="flex items-center gap-1">
+          <Gift className="h-3.5 w-3.5" aria-hidden />
+          아이템 · 남은 횟수 <span className="text-yellow-300">{itemsLeft}</span>/{MAX_ITEMS_PER_GAME}
         </span>
-        <span className="sm:hidden">{expanded ? "▲" : "▼"}</span>
+        <span className="sm:hidden">
+          {expanded ? <ChevronUp className="h-3.5 w-3.5" aria-hidden /> : <ChevronDown className="h-3.5 w-3.5" aria-hidden />}
+        </span>
       </button>
       <div className={`mt-1.5 flex-col gap-1 ${expanded ? "flex" : "hidden sm:flex"}`}>
         {ITEMS.map((item) => {
@@ -42,9 +46,10 @@ export function ItemPanel({ itemsLeft, roundItems, busy, message, disabled, onUs
               title={item.description}
               className="flex items-center justify-between gap-2 rounded-md bg-white/10 px-2.5 py-1.5 text-left text-xs font-semibold transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <span>
-                {item.emoji} {item.name}
-                {used && " ✓"}
+              <span className="flex items-center gap-1.5">
+                <item.icon className="h-3.5 w-3.5" aria-hidden />
+                {item.name}
+                {used && <Check className="h-3.5 w-3.5 text-emerald-300" aria-label="사용함" />}
                 {busy === item.id && " …"}
               </span>
               <span className="tabular-nums text-red-300">-{item.penalty.toLocaleString()}</span>
@@ -63,20 +68,41 @@ export function HintPanel({ hints }: { hints: RoundHints }) {
   return (
     <div className="pointer-events-auto w-full space-y-1 rounded-lg bg-violet-700/90 p-2.5 text-xs text-white shadow-lg">
       {hints.region && (
-        <p>
-          🗺️ 정답은 <b>{hints.region}</b>에 있어요
+        <p className="flex items-center gap-1.5">
+          <MapIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>
+            정답은 <b>{hints.region}</b>에 있어요
+          </span>
         </p>
       )}
       {hints.circle && (
-        <p>
-          🎯 지도에 표시된 <b>보라색 원 안</b>에 있어요
+        <p className="flex items-center gap-1.5">
+          <Target className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>
+            지도에 표시된 <b>보라색 원 안</b>에 있어요
+          </span>
         </p>
       )}
       {hints.nearby && (
-        <p>
-          🏫 근처에 <b>{hints.nearby}</b>
+        <p className="flex items-center gap-1.5">
+          <School className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>
+            근처에 <b>{hints.nearby}</b>
+          </span>
         </p>
       )}
     </div>
+  );
+}
+
+// 쓴 아이템을 아이콘으로 나란히 (결과 화면 등)
+export function ItemIcons({ ids }: { ids: ItemId[] }) {
+  return (
+    <span className="inline-flex items-center gap-0.5 align-[-2px]">
+      {ids.map((id, i) => {
+        const def = itemDef(id);
+        return <def.icon key={i} className="h-3.5 w-3.5" aria-label={def.name} />;
+      })}
+    </span>
   );
 }

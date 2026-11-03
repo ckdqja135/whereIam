@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Check, Ellipsis, TriangleAlert } from "lucide-react";
 import { roomActions } from "@/lib/api";
 import { ROOM_ATTACKS_PER_ROUND, ROOM_AWAY_PENALTY, RoomAttackType, RoomState } from "@/lib/room-types";
-import { attackDef } from "@/lib/attacks";
 import { normalizeAvatar } from "@/lib/avatar";
 import { getAvatarPin } from "@/lib/avatar-pin";
 import type { ItemId } from "@/lib/items";
@@ -13,7 +13,7 @@ import RoadviewPane, { RoadviewHandle } from "../RoadviewPane";
 import MapPane from "../MapPane";
 import AvatarPin from "../avatar/AvatarPin";
 import { HintPanel, ItemPanel } from "../ItemPanel";
-import AttackPanel from "./AttackPanel";
+import AttackPanel, { AttackNotice } from "./AttackPanel";
 import AttackEffects from "./AttackEffects";
 
 interface RoomRoundProps {
@@ -185,8 +185,9 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
 
       {/* 자리 비움 감점 안내 (본인에게만) */}
       {awayThisRound > 0 && !submitted && (
-        <div className="pointer-events-none absolute bottom-24 left-1/2 z-20 -translate-x-1/2 rounded-full bg-amber-500 px-4 py-1.5 text-xs font-bold text-white shadow-lg">
-          ⚠️ 다른 탭/창으로 이동해서 이번 라운드 -{(awayThisRound * ROOM_AWAY_PENALTY).toLocaleString()}점
+        <div className="pointer-events-none absolute bottom-24 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-amber-500 px-4 py-1.5 text-xs font-bold text-white shadow-lg">
+          <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          다른 탭/창으로 이동해서 이번 라운드 -{(awayThisRound * ROOM_AWAY_PENALTY).toLocaleString()}점
         </div>
       )}
 
@@ -207,12 +208,17 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
                   {!p.connected && " (연결 끊김)"}
                 </span>
                 {(p.awayCount ?? 0) > 0 && (
-                  <span className="text-yellow-300" title="라운드 중 다른 탭/창으로 나간 횟수">
-                    ⚠️{p.awayCount}
+                  <span className="flex items-center gap-0.5 text-yellow-300" title="라운드 중 다른 탭/창으로 나간 횟수">
+                    <TriangleAlert className="h-3 w-3" aria-hidden />
+                    {p.awayCount}
                   </span>
                 )}
                 <span className="tabular-nums text-white/70">{p.totalScore.toLocaleString()}</span>
-                <span className={p.submitted ? "text-green-400" : "text-white/40"}>{p.submitted ? "✓" : "…"}</span>
+                {p.submitted ? (
+                  <Check className="h-3.5 w-3.5 text-green-400" aria-label="제출함" />
+                ) : (
+                  <Ellipsis className="h-3.5 w-3.5 text-white/40" aria-label="고르는 중" />
+                )}
               </div>
             ))}
           </div>
@@ -255,9 +261,7 @@ export default function RoomRound({ code, token, state, clockOffset, onState }: 
           </div>
           {/* 방해 아이템 알림 (모두에게) */}
           {recentAttacks.map((a) => (
-            <div key={a.id} className="rounded-full bg-black/75 px-3 py-1 text-xs font-semibold text-white shadow">
-              {nicknameOf(a.fromId)} → {nicknameOf(a.toId)} {attackDef(a.type).emoji} {attackDef(a.type).name}!
-            </div>
+            <AttackNotice key={a.id} from={nicknameOf(a.fromId)} to={nicknameOf(a.toId)} type={a.type} />
           ))}
         </div>
       </div>

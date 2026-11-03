@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Check, Ellipsis, TriangleAlert } from "lucide-react";
 import { reportQuizPosition, roomActions } from "@/lib/api";
 import { ROOM_AWAY_PENALTY, RoomState } from "@/lib/room-types";
 import { normalizeAvatar } from "@/lib/avatar";
@@ -114,8 +115,9 @@ export default function RoomQuiz({ code, token, state, clockOffset, onState }: R
     banner = <span className="rounded-full bg-red-600 px-4 py-1.5 text-xs font-semibold text-white">{error}</span>;
   } else if (awayThisRound > 0) {
     banner = (
-      <span className="rounded-full bg-amber-500 px-4 py-1.5 text-xs font-bold text-white">
-        ⚠️ 다른 탭/창으로 이동해서 이번 문제 -{(awayThisRound * ROOM_AWAY_PENALTY).toLocaleString()}점
+      <span className="flex items-center gap-1.5 rounded-full bg-amber-500 px-4 py-1.5 text-xs font-bold text-white">
+        <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        다른 탭/창으로 이동해서 이번 문제 -{(awayThisRound * ROOM_AWAY_PENALTY).toLocaleString()}점
       </span>
     );
   }
@@ -153,8 +155,9 @@ export default function RoomQuiz({ code, token, state, clockOffset, onState }: R
                     {!p.connected && " (연결 끊김)"}
                   </span>
                   {(p.awayCount ?? 0) > 0 && (
-                    <span className="text-yellow-300" title="문제를 푸는 중 다른 탭/창으로 나간 횟수">
-                      ⚠️{p.awayCount}
+                    <span className="flex items-center gap-0.5 text-yellow-300" title="문제를 푸는 중 다른 탭/창으로 나간 횟수">
+                      <TriangleAlert className="h-3 w-3" aria-hidden />
+                      {p.awayCount}
                     </span>
                   )}
                   <span className="tabular-nums text-white/80">{p.totalScore.toLocaleString()}</span>
@@ -164,7 +167,11 @@ export default function RoomQuiz({ code, token, state, clockOffset, onState }: R
                       {d.toLocaleString()}
                     </span>
                   ) : (
-                    <span className={p.submitted ? "text-green-400" : "text-white/40"}>{p.submitted ? "✓" : "…"}</span>
+                    p.submitted ? (
+                      <Check className="h-3.5 w-3.5 text-green-400" aria-label="제출함" />
+                    ) : (
+                      <Ellipsis className="h-3.5 w-3.5 text-white/40" aria-label="고르는 중" />
+                    )
                   )}
                 </div>
               );
