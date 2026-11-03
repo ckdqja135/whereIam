@@ -1,7 +1,7 @@
 // 4지선다 퀴즈 규칙. 서버 server/src/rooms/quiz.ts 와 반드시 같게 유지할 것.
 import type { QuizLevel } from "./room-types";
 
-export type { QuizLevel, QuizQuestion } from "./room-types";
+export type { QuizLevel, QuizPublicQuestion } from "./room-types";
 
 export const QUIZ_QUESTIONS = 10;
 export const QUIZ_SECONDS = 15;

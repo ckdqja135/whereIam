@@ -14,6 +14,8 @@ import type { Avatar, ChallengeLocation, GameSettings, Guess, ItemId } from '../
 import { generateId } from '../challenges/id';
 import { MAX_ITEMS_PER_GAME } from '../challenges/items';
 import { haversineKm, ROUNDS_PER_GAME, scoreGuesses } from '../challenges/score';
+import { QuizPoolService } from '../quiz/quiz-pool.service';
+import { QuizServerQuestion, toPublicQuestion } from '../quiz/quiz-question';
 import { CreateRoomDto, JoinRoomDto } from './dto/create-room.dto';
 import { RoomStartDto } from './dto/lobby.dto';
 import { RoomAnswerDto, RoomAttackDto, RoomAwayDto, RoomGuessDto, RoomPositionDto } from './dto/round.dto';
@@ -26,7 +28,6 @@ import {
   ROOM_AWAY_PENALTY,
   ROOM_ATTACKS_PER_ROUND,
   ROOM_SYSTEM_PLAYER_ID,
-  QuizQuestion,
   RoomAttack,
   RoomChatMessage,
   RoomJoinResponse,
@@ -91,9 +92,10 @@ interface Room {
   round: number;
   // 라운드별 위치. 퀴즈에서는 quiz[i].location 을 복사해 두고, 라운드 수도 이 길이로 정한다
   locations: ChallengeLocation[];
-  corrected: boolean[]; // 라운드별 정답 좌표 보정 여부
-  // 퀴즈 문제 (classic 이면 빈 배열). answer 는 그 문제 결과 공개 전까지 절대 내보내지 않는다
-  quiz: QuizQuestion[];
+  corrected: boolean[]; // 라운드별 정답 좌표 보정 여부 (classic 만)
+  // 퀴즈 문제 (classic 이면 빈 배열). 서버가 문제 풀에서 고른다.
+  // answer 와 좌표(location)는 그 문제 결과 공개 전까지 절대 내보내지 않는다
+  quiz: QuizServerQuestion[];
   // 퀴즈: 현재 문제를 낸 시각 (빨리 맞힌 보너스 계산용). classic 이면 null
   questionStartedAt: number | null;
   rounds: RoomRoundResult[];
@@ -123,7 +125,10 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
   private readonly timings: RoomTimings;
   private sweepTimer: NodeJS.Timeout | null = null;
 
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly quizPool: QuizPoolService,
+  ) {
     this.timings = loadRoomTimings(config);
   }
 
@@ -258,18 +263,12 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (isQuiz(room)) {
-      if (!dto.quiz || dto.quiz.length !== QUIZ_QUESTIONS) {
-        throw new BadRequestException(`퀴즈 문제가 ${QUIZ_QUESTIONS}개 필요합니다`);
-      }
-      // 보기 형식(4개, 1~40자, 중복 없음)과 정답 번호 범위는 DTO 에서 검사
-      room.quiz = dto.quiz.map((q) => ({
-        location: { lat: q.location.lat, lng: q.location.lng, panoId: q.location.panoId },
-        choices: q.choices.map((c) => c.trim()),
-        answer: q.answer,
-        level: q.level,
-      }));
-      // 위치/정답 보정 로직은 classic 과 같이 locations 를 쓴다
-      room.locations = room.quiz.map((q) => ({ ...q.location }));
+      // 문제는 서버가 문제 풀에서 고른다 (본문의 locations 는 무시). 풀이 덜 모였으면 503 이고,
+      // 방 상태를 바꾸기 전에 던지므로 방은 대기실 그대로 남는다
+      const quiz = this.quizPool.buildQuiz(QUIZ_QUESTIONS);
+      room.quiz = quiz;
+      // 라운드 수·결과 공개 좌표는 classic 과 같이 locations 를 쓴다
+      room.locations = quiz.map((q) => ({ ...q.location }));
     } else {
       if (!dto.locations || dto.locations.length !== ROUNDS_PER_GAME) {
         throw new BadRequestException(`위치가 ${ROUNDS_PER_GAME}개 필요합니다`);
@@ -292,10 +291,12 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
 
   // ───────────── 라운드 진행 ─────────────
 
-  // 클라이언트가 실제로 열린 파노라마 좌표를 알려주면 정답 좌표를 그 위치로 보정한다 (라운드당 한 번)
+  // 클라이언트가 실제로 열린 파노라마 좌표를 알려주면 정답 좌표를 그 위치로 보정한다 (라운드당 한 번, classic 만).
+  // 퀴즈 좌표는 문제 풀의 정확한 파노라마 좌표라 보정하지 않는다 (보정 여부로 비공개 좌표를 떠볼 수 없게)
   reportPosition(rawCode: string, token: string | undefined, dto: RoomPositionDto): void {
     const room = this.getRoom(rawCode);
     this.auth(room, token);
+    if (isQuiz(room)) return;
     if (room.status !== 'playing' || dto.round !== room.round) return;
     const index = room.round - 1;
     const loc = room.locations[index];
@@ -569,7 +570,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
 
   // quiz: 맞히면 기본 점수 + 남은 초 보너스, 틀리거나 시간 초과면 감점. 총점은 0 아래로 내려가지 않는다.
   // score 에는 이번 문제 점수 변화(자리 비움 감점 포함, 음수 가능)를 그대로 담는다
-  private scoreQuizRound(room: Room, quiz: QuizQuestion): RoomRoundPlayerResult[] {
+  private scoreQuizRound(room: Room, quiz: QuizServerQuestion): RoomRoundPlayerResult[] {
     const secondMs = Math.max(1, this.timings.secondMs);
     // 제한 시간이 끝나는 시각 (여유 시간 제외). 여유 시간 안에 고르면 남은 초는 0
     const limitEnd = (room.questionStartedAt ?? Date.now()) + QUIZ_SECONDS * this.timings.secondMs;
@@ -789,9 +790,11 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
 
   // 요청한 플레이어 기준 상태. 진행 중에는 다른 사람의 추측을 절대 내보내지 않는다 (제출 여부만)
   private buildState(room: Room, me: string): RoomState {
-    const showLocation = room.status === 'playing' || room.status === 'reveal';
-    // 퀴즈 보기는 현재 문제 것만 (정답 번호는 rounds 의 quiz 에서 결과 공개 때 내려간다)
-    const question = showLocation && isQuiz(room) ? room.quiz[room.round - 1] : undefined;
+    const inRound = room.status === 'playing' || room.status === 'reveal';
+    // 퀴즈는 현재 문제의 panoId·보기·난이도만 (정답 번호는 rounds 의 quiz 로 결과 공개 때 내려간다)
+    const question = inRound && isQuiz(room) ? room.quiz[room.round - 1] : undefined;
+    // 퀴즈 진행 중에는 좌표도 비공개 (결과 공개 때부터 location / rounds 의 answer 로 보인다)
+    const showLocation = inRound && !(question && room.status === 'playing');
     // 대기실에서는 아직 위치가 없으므로 게임 종류별 기본 라운드 수
     const totalRounds = room.status === 'lobby' ? (isQuiz(room) ? QUIZ_QUESTIONS : ROUNDS_PER_GAME) : room.locations.length;
     return {
@@ -823,7 +826,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       rounds: room.rounds,
       chat: room.chat,
       attacks: room.status === 'playing' ? room.attacks : [],
-      quiz: question ? { choices: [...question.choices], level: question.level } : null,
+      quiz: question ? toPublicQuestion(question) : null,
     };
   }
 }

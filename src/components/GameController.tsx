@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRoom, isApiConfigured, joinRoom } from "@/lib/api";
 import { saveRoomCredentials } from "@/lib/use-room";
+import { contributeInBackground } from "@/lib/quiz-pool";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useKakaoSdk } from "@/lib/use-kakao-sdk";
 import { loadProfile, Profile, saveProfile } from "@/lib/profile";
@@ -27,6 +28,10 @@ export default function GameController() {
 
 function HomeGame() {
   const sdk = useKakaoSdk();
+  // 메인 화면에 들어오면 퀴즈 문제 풀에 로드뷰를 조금씩 보탠다 (탭당 한 번, 백그라운드)
+  useEffect(() => {
+    if (sdk.ready && isApiConfigured()) contributeInBackground();
+  }, [sdk.ready]);
   const router = useRouter();
   const [screen, setScreen] = useState<Screen>("lobby");
   // 저장된 프로필/설정 (브라우저에서만 렌더링되므로 바로 읽을 수 있다)

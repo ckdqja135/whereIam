@@ -2,7 +2,7 @@
 
 whereIam(카카오 로드뷰 기반 국내 위치 맞히기 게임)의 백엔드입니다.
 NestJS 11 + SQLite(`better-sqlite3`)로 동작하며, 챌린지 생성/조회, 결과 제출(점수는 서버가 계산), 리더보드,
-실시간 대결 방(2~4인, 롱 폴링, 메모리 저장)을 제공합니다.
+실시간 대결 방(2~4인, 롱 폴링, 메모리 저장), 4지선다 퀴즈 문제 풀/혼자 하기를 제공합니다.
 
 - 프론트(Next.js)는 Vercel, 이 서버는 개인 리눅스 서버에서 PM2로 실행합니다.
 - DB는 파일 하나(SQLite)라 별도 DB 설치가 필요 없습니다. 테이블은 서버 시작 시 자동 생성됩니다.
@@ -33,8 +33,8 @@ WebSocket 대신 **롱 폴링**을 씁니다 (Vercel 서버 사이드 프록시�
 | GET | `/rooms/:code/state?since=<version>` | 방 상태. `since` 가 없거나 현재 version 과 다르면 즉시, 같으면 바뀔 때까지(최대 25초) 기다렸다 응답 |
 | POST | `/rooms/:code/ready` | `{ ready }` 준비 토글 (대기실) |
 | POST | `/rooms/:code/settings` | `{ settings }` 설정 변경 (방장, 대기실). 참가자 준비 상태 초기화. `settings.gameType` 으로 classic/quiz 전환 |
-| POST | `/rooms/:code/start` | 게임 시작 (방장, 2명 이상 접속, 참가자 모두 준비). classic: `{ locations: [5개] }` / quiz: `{ quiz: [10개] }` (각 `{ location, choices: [4개], answer: 0~3, level: easy/hard }`) |
-| POST | `/rooms/:code/position` | `{ round, lat, lng }` 실제 로드뷰 좌표 보고 → 1km 이내면 그 라운드 정답 보정 (204) |
+| POST | `/rooms/:code/start` | 게임 시작 (방장, 2명 이상 접속, 참가자 모두 준비). classic: `{ locations: [5개] }` / quiz: `{}` (서버가 문제 풀에서 10문제를 고름. 풀이 덜 모였으면 503, 방은 대기실 그대로) |
+| POST | `/rooms/:code/position` | `{ round, lat, lng }` 실제 로드뷰 좌표 보고 → 1km 이내면 그 라운드 정답 보정 (204, classic 전용. quiz 는 무시) |
 | POST | `/rooms/:code/guess` | `{ round, guess, items }` 라운드 제출 (classic 전용, quiz 면 409). 남은 사람이 모두 제출하면 라운드 종료 |
 | POST | `/rooms/:code/answer` | `{ round, choice: 0~3 }` 퀴즈 보기 선택 (quiz 전용, 문제당 한 번, 바꿀 수 없음). 남은 사람이 모두 고르면 문제 종료 |
 | POST | `/rooms/:code/next` | 다음 라운드 / 마지막이면 종료 (방장, 결과 공개 중). 20초(퀴즈는 3초) 뒤에는 자동 진행 |
@@ -55,9 +55,10 @@ WebSocket 대신 **롱 폴링**을 씁니다 (Vercel 서버 사이드 프록시�
 
 규칙 상수와 점수 계산은 `src/rooms/quiz.ts` 에 있고, 프론트의 `src/lib/quiz.ts` 와 항상 같게 유지해야 합니다.
 
-- 방장 브라우저가 카카오 주소 변환으로 문제 10개를 만들어 `start` 로 올립니다. 보기는 앞뒤 공백 제거 후 1~40자, 4개 모두 달라야 합니다.
-  정답 번호(`answer`)는 서버만 갖고 있다가 그 문제의 결과 공개 때 `rounds[].quiz` 로 내려줍니다.
-- 진행 중 상태의 `quiz` 에는 현재 문제의 보기(`choices`, `level`)만 있고, 다른 사람이 고른 보기는 제출 여부(`submitted`)만 보입니다.
+- 문제는 서버가 **문제 풀**(아래)에서 고릅니다. 방장도 정답을 모릅니다.
+- 진행 중(`playing`) 상태의 `quiz` 에는 현재 문제의 `panoId`, 보기(`choices`), `level` 만 있고 `location` 은 `null` 입니다 (좌표 비공개).
+  결과 공개(`reveal`)부터 `location` 과 `rounds[].answer` 에 실제 좌표, `rounds[].quiz` 에 정답 번호(`answer`)가 들어갑니다.
+  다른 사람이 고른 보기는 제출 여부(`submitted`)만 보입니다.
 - 문제마다 15초 (설정의 `timeLimit` 은 무시, `roundDeadline` 에 2초 여유 포함). 라운드 수(`totalRounds`)는 10입니다.
 - 정답: 기본 점수(쉬움 1000 / 어려움 1500) + 남은 초 × 50 (0~15, 올림 — 화면 타이머 표시와 같은 초). 남은 초는 서버가 문제를 낸 시각과 고른 시각으로 계산합니다.
   오답·시간 초과는 -500. 자리 비움 감점(1회 -300)도 그대로 적용되고, 총점은 0 아래로 내려가지 않습니다.
@@ -65,10 +66,32 @@ WebSocket 대신 **롱 폴링**을 씁니다 (Vercel 서버 사이드 프록시�
 - 결과 공개는 3초(`ROOM_QUIZ_REVEAL_MS`) 뒤 다음 문제로 자동 진행됩니다. 힌트/방해 아이템은 쓸 수 없습니다.
 - 챌린지(`/challenges`)는 classic 만 지원합니다. `settings.gameType` 을 보내도 저장하지 않습니다.
 
+#### 퀴즈 문제 풀 / 혼자 하기 (`/quiz`)
+
+타입은 `src/quiz/quiz-api.types.ts` 에 있고, 프론트의 `src/lib/quiz-api-types.ts` 와 항상 같게 유지해야 합니다.
+
+브라우저는 무작위 로드뷰를 찾아 **실제로 열린 파노라마 좌표**만 보탭니다. 서버가 그 좌표로 카카오 REST API
+(`coord2regioncode`, 행정동 기준)를 호출해 시·도(`r1`)와 시·군·구(`r2`, "성남시 분당구" → "성남시", 없으면 빈 값)를
+SQLite `quiz_pool` 테이블에 저장하고, 문제 선택·채점도 서버가 합니다. 플레이어에게는 `panoId`·보기·난이도만 가고,
+좌표와 정답은 답한 뒤(대결은 결과 공개 때)에만 공개합니다. `KAKAO_REST_API_KEY` 가 없으면 풀에 보탤 수 없습니다(503).
+
+| 메서드 | 경로 | 설명 |
+| --- | --- | --- |
+| POST | `/quiz/pool` | `{ items: [{ panoId, lat(33~39), lng(124~132) }] }` (1~20개) → `{ added, total, ready }`. 이미 있는 panoId·지역 확인 실패는 건너뜀. 20회/분 |
+| GET | `/quiz/pool/stats` | `{ total, ready, minimum }`. `total` 은 빠지지 않은 문제 수, `ready` 는 `total ≥ minimum(40)` 이고 시·도가 4곳 이상 |
+| POST | `/quiz/pool/report` | `{ panoId, lat, lng }` 로드뷰를 띄운 뒤 실제 좌표 보고 (항상 204). 저장된 좌표와 100m 넘게 다르면 그 문제를 풀에서 뺌. 60회/분 |
+| POST | `/quiz/solo` | 혼자 하기 시작 → `201 { sessionId, questions: [{ panoId, choices, level }] × 10 }`. 풀이 덜 모였으면 503. 10회/분 |
+| POST | `/quiz/solo/:sessionId/answer` | `{ index: 0~9, choice: 0~3 \| null }` → `{ correct, answer, location: { lat, lng } }`. 문제당 한 번(두 번째는 409), 없거나 만료된 세션 404 |
+
+- 문제 고르기: 빠지지 않은 문제 중 무작위 10개 (같은 시·군·구는 되도록 겹치지 않게).
+  시·군·구가 있는 문제는 절반 확률로 어려움(보기 "시·도 시·군·구": 같은 시·도에서 가장 가까운 다른 시·군·구 1개 + 다른 시·도 2개),
+  나머지는 쉬움(보기: 시·도 4개). 보기 순서는 무작위입니다.
+- 혼자 하기 세션은 메모리에만 있고 1시간 뒤 만료됩니다 (최대 2000개, 넘으면 오래된 것부터 삭제). 점수는 브라우저가 계산합니다.
+
 > **방 상태는 메모리에만 있습니다.** 서버를 재시작(`pm2 reload`/`restart`, 배포)하면 진행 중인 방이 모두 사라집니다.
 > 업데이트는 게임이 진행 중이지 않을 때 하세요. 같은 이유로 PM2 는 반드시 fork 모드 1개로 실행해야 합니다.
 
-Rate limit: IP당 전체 60회/분(API별), 챌린지 생성·결과 제출·방 만들기는 10회/분, 방 참가는 20회/분.
+Rate limit: IP당 전체 60회/분(API별), 챌린지 생성·결과 제출·방 만들기·퀴즈 혼자 하기 시작은 10회/분, 방 참가·퀴즈 풀 보태기는 20회/분.
 방 상태 조회(롱 폴링)는 rate limit 에서 제외됩니다.
 
 ## 환경 변수 (`.env`)
@@ -82,10 +105,13 @@ Rate limit: IP당 전체 60회/분(API별), 챌린지 생성·결과 제출·방
 | `CORS_ORIGINS` | (없음) | 허용할 프론트 origin, 쉼표 구분. 예: `https://whereiam.vercel.app,http://localhost:3000` |
 | `DB_PATH` | `./data/whereiam.db` | SQLite 파일 경로. 디렉터리가 없으면 자동 생성 |
 | `PROXY_SECRET` | (없음) | 프론트 프록시 전용 공유 비밀키. 설정하면 `/health` 외 모든 요청에 `X-Proxy-Secret` 헤더가 일치해야 한다 (프록시 방식에서 사용) |
+| `KAKAO_REST_API_KEY` | (없음) | 카카오 **REST API 키** (Kakao Developers > 앱 키 > REST API 키, JavaScript 키 아님). 퀴즈 문제 풀의 지역 확인에 필요. 없으면 `POST /quiz/pool` 이 503 이고 시작 로그에 경고 |
+| `KAKAO_API_BASE` | `https://dapi.kakao.com` | 카카오 API 주소. 테스트에서만 바꾼다 |
 
 테스트용으로만 방 타이밍을 줄일 수 있습니다 (모두 ms, 운영에서는 설정하지 말 것):
 `ROOM_LONGPOLL_MS`(25000), `ROOM_REVEAL_MS`(20000), `ROOM_QUIZ_REVEAL_MS`(퀴즈 결과 공개 시간, 3000), `ROOM_GRACE_MS`(2000), `ROOM_SECOND_MS`(제한 시간 1초의 길이, 1000),
-`ROOM_DISCONNECT_MS`(40000), `ROOM_LOBBY_KICK_MS`(60000), `ROOM_IDLE_MS`(300000), `ROOM_FINISHED_TTL_MS`(1800000), `ROOM_SWEEP_MS`(5000).
+`ROOM_DISCONNECT_MS`(40000), `ROOM_LOBBY_KICK_MS`(60000), `ROOM_IDLE_MS`(300000), `ROOM_FINISHED_TTL_MS`(1800000), `ROOM_SWEEP_MS`(5000),
+`QUIZ_POOL_MINIMUM`(퀴즈를 낼 수 있는 최소 풀 크기, 40. 10보다 작게는 안 됨).
 
 ## 로컬 개발
 

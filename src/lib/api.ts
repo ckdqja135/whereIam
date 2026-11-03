@@ -22,6 +22,15 @@ import type {
   RoomStartRequest,
   RoomState,
 } from "./room-types";
+import type {
+  QuizPoolAddRequest,
+  QuizPoolAddResponse,
+  QuizPoolReportRequest,
+  QuizPoolStats,
+  QuizSoloAnswerRequest,
+  QuizSoloAnswerResponse,
+  QuizSoloStartResponse,
+} from "./quiz-api-types";
 
 // 백엔드(server/, 자체 서버) 주소. Vercel 환경변수 NEXT_PUBLIC_API_URL 로 설정한다.
 // - "/api/backend" (권장): 같은 도메인의 프록시 라우트를 거쳐 Vercel 서버가 BACKEND_URL 로 대신 호출한다.
@@ -56,7 +65,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (res.status === 404) message = "챌린지를 찾을 수 없습니다.";
     if (res.status === 429) message = "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.";
     // 서버가 한국어 안내(409 "방이 가득 찼습니다" 등)를 주면 그걸 보여준다
-    if (res.status === 403 || res.status === 409 || res.status === 503) {
+    if (res.status === 400 || res.status === 403 || res.status === 409 || res.status === 503) {
       try {
         const body = (await res.json()) as { message?: unknown };
         if (typeof body.message === "string") message = body.message;
@@ -120,6 +129,31 @@ export const roomActions = {
   away: (code: string, token: string, body: RoomAwayRequest) => roomRequest<void>(code, "/away", token, post(body)),
   chat: (code: string, token: string, body: RoomChatRequest) => roomRequest<RoomState>(code, "/chat", token, post(body)),
 };
+
+// ---------- 4지선다 퀴즈 (문제 풀 / 혼자 하기) ----------
+
+export function getQuizPoolStats() {
+  return request<QuizPoolStats>("/quiz/pool/stats");
+}
+
+export function addToQuizPool(body: QuizPoolAddRequest) {
+  return request<QuizPoolAddResponse>("/quiz/pool", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function reportQuizPosition(body: QuizPoolReportRequest) {
+  return request<void>("/quiz/pool/report", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function startQuizSolo() {
+  return request<QuizSoloStartResponse>("/quiz/solo", { method: "POST", body: "{}" });
+}
+
+export function answerQuizSolo(sessionId: string, body: QuizSoloAnswerRequest) {
+  return request<QuizSoloAnswerResponse>(`/quiz/solo/${encodeURIComponent(sessionId)}/answer`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
 
 // ---------- 챌린지 ----------
 

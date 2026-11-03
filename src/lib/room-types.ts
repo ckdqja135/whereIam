@@ -10,11 +10,11 @@ import type { ChallengeLocation, GameSettings, Guess, ItemId, PlayerInfo } from 
 // ---------- 4지선다 퀴즈 (gameType: "quiz") ----------
 export type QuizLevel = "easy" | "hard"; // easy: 시·도 보기 / hard: 시·군·구 보기
 
-// 방장 브라우저가 만들어 올리는 문제. answer 는 서버만 갖고 있다가 결과 공개 때 내려준다.
-export interface QuizQuestion {
-  location: ChallengeLocation;
-  choices: string[]; // 정확히 4개, 서로 다름, 각 1~40자
-  answer: number; // 0~3
+// 플레이어에게 보내는 문제. 좌표와 정답은 없다 (로드뷰는 panoId 만으로 연다).
+// 문제는 서버의 문제 풀에서 서버가 고르고, 정답은 서버만 안다.
+export interface QuizPublicQuestion {
+  panoId: number;
+  choices: string[]; // 4개
   level: QuizLevel;
 }
 
@@ -84,8 +84,9 @@ export interface RoomState {
   chat?: RoomChatMessage[];
   // 현재 라운드에 쏜 방해 아이템 전체 (라운드가 바뀌면 비워짐). 구버전 서버에는 없을 수 있음
   attacks?: RoomAttack[];
-  // 퀴즈: playing/reveal 중 현재 문제의 보기 (정답 번호는 없음 → rounds 의 quiz 에서 공개). 그 외 null
-  quiz?: { choices: string[]; level: QuizLevel } | null;
+  // 퀴즈: playing/reveal 중 현재 문제 (정답·좌표 없음 → 정답은 rounds 의 quiz, 좌표는 rounds 의 answer 로 공개).
+  // 퀴즈 방의 playing 중에는 location 이 null 이다 (좌표 비공개). 그 외 null
+  quiz?: QuizPublicQuestion | null;
 }
 
 export interface RoomChatMessage {
@@ -127,8 +128,7 @@ export interface RoomSettingsRequest {
 }
 // POST /rooms/:code/start (방장, lobby). 카카오 로드뷰 위치는 브라우저에서만 뽑을 수 있어 방장이 올린다.
 export interface RoomStartRequest {
-  locations?: ChallengeLocation[]; // classic: 정확히 5개
-  quiz?: QuizQuestion[]; // quiz: 정확히 QUIZ_QUESTIONS 개
+  locations?: ChallengeLocation[]; // classic: 정확히 5개. quiz 는 본문 없이 보내면 서버가 문제 풀에서 고른다
 }
 // POST /rooms/:code/answer — 퀴즈 보기 선택 (문제당 한 번)
 export interface RoomAnswerRequest {

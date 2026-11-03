@@ -45,6 +45,7 @@ export default function LobbyScreen({
     e.preventDefault();
     setTouched(true);
     if (nicknameError || !sdkReady) return;
+    if (settings.gameType === "quiz" && !roomsAvailable) return;
     onStart({ nickname: nickname.trim(), avatar }, settings);
   };
 
@@ -119,7 +120,7 @@ export default function LobbyScreen({
 
         <button
           type="submit"
-          disabled={!sdkReady}
+          disabled={!sdkReady || (settings.gameType === "quiz" && !roomsAvailable)}
           className="mt-6 w-full rounded-lg bg-blue-600 py-3 font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
         >
           {sdkReady ? (settings.gameType === "quiz" ? `퀴즈 시작 (${QUIZ_QUESTIONS}문제)` : `${settings.itemMode ? "아이템" : "노템"} 모드로 시작 (${ROUNDS_PER_GAME}라운드)`) : sdkError ? "카카오맵을 불러오지 못했어요" : "카카오맵 불러오는 중..."}

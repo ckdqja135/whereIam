@@ -47,6 +47,19 @@ export class DatabaseService implements OnApplicationShutdown {
 
       CREATE INDEX IF NOT EXISTS idx_results_leaderboard
         ON results (challenge_id, total_score DESC, created_at ASC);
+
+      -- 4지선다 퀴즈 문제 풀. 좌표는 로드뷰가 실제로 열린 파노라마 좌표, 지역은 서버가 카카오 REST API 로 확인한 값
+      CREATE TABLE IF NOT EXISTS quiz_pool (
+        pano_id    INTEGER PRIMARY KEY,
+        lat        REAL,
+        lng        REAL,
+        r1         TEXT NOT NULL,              -- 시·도
+        r2         TEXT NOT NULL,              -- 시·군·구 ("성남시 분당구" → "성남시"), 없으면 ''
+        bad        INTEGER NOT NULL DEFAULT 0, -- 1: 보고된 좌표가 달라 문제에서 뺌
+        created_at TEXT                        -- ISO 문자열
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_quiz_pool_region ON quiz_pool (bad, r1, r2);
     `);
   }
 

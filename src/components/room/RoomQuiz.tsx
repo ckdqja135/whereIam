@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { roomActions } from "@/lib/api";
+import { reportQuizPosition, roomActions } from "@/lib/api";
 import { ROOM_AWAY_PENALTY, RoomState } from "@/lib/room-types";
 import { normalizeAvatar } from "@/lib/avatar";
 import { QUIZ_SECONDS } from "@/lib/quiz";
@@ -23,11 +23,12 @@ const DEADLINE_GRACE_MS = 2000;
 // 대결 4지선다 퀴즈의 한 문제 (문제 → 정답 공개까지 같은 화면이라 로드뷰를 다시 불러오지 않는다)
 export default function RoomQuiz({ code, token, state, clockOffset, onState }: RoomQuizProps) {
   const me = state.players.find((p) => p.id === state.me)!;
-  const location = state.location!;
+  // 퀴즈 방은 좌표를 보내지 않는다 (진행 중 location 은 null). 로드뷰는 panoId 로만 연다
   const revealing = state.status === "reveal";
   const result = revealing ? state.rounds[state.rounds.length - 1] : null;
   const choices = result?.quiz?.choices ?? state.quiz?.choices ?? [];
   const level = result?.quiz?.level ?? state.quiz?.level ?? "easy";
+  const panoId = state.quiz?.panoId ?? 0;
 
   const [myChoice, setMyChoice] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
@@ -119,7 +120,11 @@ export default function RoomQuiz({ code, token, state, clockOffset, onState }: R
 
   return (
     <QuizStage
-      location={location}
+      panoId={panoId}
+      onLoaded={(lat, lng) => {
+        // 실제 좌표를 서버에 보고 (저장된 문제 좌표와 다르면 서버가 그 문제를 풀에서 뺀다)
+        if (panoId) reportQuizPosition({ panoId, lat, lng }).catch(() => {});
+      }}
       questionNo={state.round}
       total={state.totalRounds}
       level={level}

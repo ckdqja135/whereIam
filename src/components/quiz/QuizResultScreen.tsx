@@ -45,7 +45,7 @@ export default function QuizResultScreen({ profile, results, total, onPlayAgain,
                 {r.correct ? "✓" : "✕"}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-gray-900">{r.question.choices[r.question.answer]}</p>
+                <p className="truncate font-semibold text-gray-900">{r.question.choices[r.answer]}</p>
                 <p className="text-xs text-gray-500">
                   {QUIZ_LEVEL_LABEL[r.question.level]}
                   {!r.correct && ` · ${r.choice === null ? "시간 초과" : `고른 답: ${r.question.choices[r.choice]}`}`}

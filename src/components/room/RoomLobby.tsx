@@ -9,7 +9,7 @@ import { normalizeAvatar } from "@/lib/avatar";
 import { getRandomRoadviewLocation } from "@/lib/random-location";
 import { ROUNDS_PER_GAME } from "@/lib/score";
 import { QUIZ_QUESTIONS } from "@/lib/quiz";
-import { generateQuiz } from "@/lib/quiz-generator";
+import { ensureQuizPoolReady } from "@/lib/quiz-pool";
 import AvatarPin from "../avatar/AvatarPin";
 import GameSettingsIcons from "../GameSettingsIcons";
 import SettingsEditor from "../SettingsEditor";
@@ -30,6 +30,7 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState<number | null>(null);
   const quiz = state.settings.gameType === "quiz";
+  const [poolProgress, setPoolProgress] = useState<{ total: number; minimum: number } | null>(null);
   const questionCount = quiz ? QUIZ_QUESTIONS : ROUNDS_PER_GAME;
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -62,9 +63,11 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
     setPreparing(0);
     try {
       if (quiz) {
-        // 4지선다 퀴즈: 문제·보기·정답을 만들어 올린다 (정답은 서버가 숨겨 두었다가 공개)
-        const quizQuestions = await generateQuiz(QUIZ_QUESTIONS, (done) => setPreparing(done));
-        onState(await roomActions.start(code, token, { quiz: quizQuestions }));
+        // 4지선다 퀴즈: 문제는 서버가 문제 풀에서 고른다 (방장도 문제·정답을 모른다).
+        // 풀이 부족하면(배포 직후 등) 먼저 로드뷰를 모아 보탠다
+        await ensureQuizPoolReady((total, minimum) => setPoolProgress({ total, minimum }));
+        setPoolProgress(null);
+        onState(await roomActions.start(code, token, {}));
         return;
       }
       const locations: ChallengeLocation[] = [];
@@ -77,6 +80,7 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
       setError(err instanceof Error ? err.message : "게임을 시작하지 못했어요.");
     } finally {
       setPreparing(null);
+      setPoolProgress(null);
     }
   };
 
@@ -201,7 +205,11 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
               disabled={!canStart || !sdkReady || preparing !== null}
               className="flex-1 rounded-lg bg-blue-600 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
             >
-              {preparing !== null
+              {poolProgress
+                ? `문제 모으는 중... (${poolProgress.total}/${poolProgress.minimum})`
+                : preparing !== null && quiz
+                  ? "문제 받는 중..."
+                  : preparing !== null
                 ? `문제 준비 중... (${preparing}/${questionCount})`
                 : players.length < ROOM_MIN_PLAYERS
                   ? "친구를 기다리는 중"

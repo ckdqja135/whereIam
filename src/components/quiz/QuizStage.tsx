@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { ChallengeLocation } from "@/lib/api-types";
 import type { Avatar } from "@/lib/avatar";
 import type { QuizLevel } from "@/lib/quiz";
 import { QUIZ_LEVEL_LABEL, QUIZ_SECONDS } from "@/lib/quiz";
@@ -14,8 +13,12 @@ export interface QuizPicker {
   avatar: Avatar;
 }
 
+// 퀴즈는 좌표를 받지 않고 panoId 만으로 로드뷰를 연다. setPanoId 에는 위치가 필요하지만
+// 아무 좌표나 넣어도 panoId 의 실제 위치로 열린다 (실험으로 확인). 국토 중앙 좌표를 넣는다
+const PLACEHOLDER = { lat: 36.5, lng: 127.5 };
+
 interface QuizStageProps {
-  location: ChallengeLocation;
+  panoId: number;
   questionNo: number;
   total: number;
   level: QuizLevel;
@@ -29,7 +32,8 @@ interface QuizStageProps {
   pickers?: Map<number, QuizPicker[]>;
   disabled: boolean;
   onPick: (choice: number) => void;
-  onLoaded?: () => void;
+  // 로드뷰가 열리면 실제 좌표와 함께 호출 (타이머 시작·위치 보고용)
+  onLoaded?: (lat: number, lng: number) => void;
   topLeft?: ReactNode; // 점수/참가자 현황
   banner?: ReactNode; // 정답·오답 안내
 }
@@ -38,7 +42,7 @@ const MARKS = ["A", "B", "C", "D"];
 
 // 4지선다 문제 화면: 움직일 수 없는 로드뷰(사진처럼) + 타이머 + 보기 4개
 export default function QuizStage({
-  location,
+  panoId,
   questionNo,
   total,
   level,
@@ -62,14 +66,14 @@ export default function QuizStage({
       {/* 이동·회전·확대를 모두 막은 로드뷰 = 스크린샷처럼 보인다 */}
       <div className="absolute inset-0">
         <RoadviewPane
-          panoId={location.panoId}
-          lat={location.lat}
-          lng={location.lng}
+          panoId={panoId}
+          lat={PLACEHOLDER.lat}
+          lng={PLACEHOLDER.lng}
           isLoading={false}
           allowMove={false}
           allowPan={false}
           allowZoom={false}
-          onActualPosition={onLoaded ? () => onLoaded() : undefined}
+          onActualPosition={onLoaded}
         />
       </div>
 
