@@ -29,9 +29,9 @@ export class QuizSoloService {
     private readonly stations: StationPoolService,
   ) {}
 
-  start(kind: QuizKind): QuizSoloStartResponse {
-    // 풀이 덜 모였으면 503
-    const questions = kind === 'station' ? this.stations.buildQuiz() : this.pool.buildQuiz();
+  start(kind: QuizKind, exclude: ReadonlySet<number> = new Set()): QuizSoloStartResponse {
+    // 풀이 덜 모였으면 503. 최근에 본 문제(exclude)는 되도록 빼고 고른다
+    const questions = kind === 'station' ? this.stations.buildQuiz(undefined, exclude) : this.pool.buildQuiz(undefined, exclude);
 
     const now = Date.now();
     this.prune(now);

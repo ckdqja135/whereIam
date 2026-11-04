@@ -5,7 +5,8 @@ import type { Profile } from "@/lib/profile";
 import type { QuizKind, QuizPublicQuestion } from "@/lib/quiz";
 import { applyQuizDelta, QUIZ_RULES, QUIZ_TEXT, quizDelta } from "@/lib/quiz";
 import { answerQuizSolo, reportQuizPosition, startQuizSolo } from "@/lib/api";
-import { ensureQuizPoolReady, ensureStationPoolReady } from "@/lib/quiz-pool";
+import { ensureQuizPoolReady, ensureStationPoolReady, growPoolDuringGame } from "@/lib/quiz-pool";
+import { addSeen, loadSeen } from "@/lib/quiz-seen";
 import { useBlockDevtools } from "@/lib/use-anti-cheat";
 import AvatarPin from "../avatar/AvatarPin";
 import QuizStage from "./QuizStage";
@@ -54,8 +55,12 @@ export default function QuizSoloSession({ kind, profile, onFinish }: QuizSoloSes
       try {
         const ensure = kind === "station" ? ensureStationPoolReady : ensureQuizPoolReady;
         await ensure((t, m) => !cancelled && setPreparing({ total: t, minimum: m }));
-        const res = await startQuizSolo(kind);
-        if (!cancelled) setSession({ id: res.sessionId, questions: res.questions });
+        // 최근에 본 문제는 되도록 빼 달라고 보낸다
+        const res = await startQuizSolo(kind, loadSeen(kind));
+        if (cancelled) return;
+        addSeen(kind, res.questions.map((q) => q.panoId));
+        setSession({ id: res.sessionId, questions: res.questions });
+        growPoolDuringGame(kind);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "문제를 불러오지 못했어요.");
       }

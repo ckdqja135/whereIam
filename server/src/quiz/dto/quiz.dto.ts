@@ -51,11 +51,23 @@ export class QuizPoolAddDto {
 // POST /quiz/pool/report
 export class QuizPoolReportDto extends QuizPoolItemDto {}
 
+// 최근에 본 문제(panoId)를 빼 달라는 목록의 최대 길이 (브라우저가 기억해서 보낸다)
+export const QUIZ_EXCLUDE_MAX = 300;
+
 // POST /quiz/solo. 없으면 region
 export class QuizSoloStartDto {
   @IsOptional()
   @IsIn(QUIZ_KINDS)
   kind?: QuizKind;
+
+  // 최근에 본 문제는 되도록 다시 내지 않는다 (풀이 모자라면 섞일 수 있음)
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(QUIZ_EXCLUDE_MAX)
+  @IsInt({ each: true })
+  @IsPositive({ each: true })
+  @Max(Number.MAX_SAFE_INTEGER, { each: true })
+  exclude?: number[];
 }
 
 // POST /quiz/solo/:sessionId/answer. 이번 판에 실제로 있는 문제 번호인지는 서비스에서 검사

@@ -6,6 +6,7 @@ import { reportQuizPosition, roomActions } from "@/lib/api";
 import { ROOM_AWAY_PENALTY, RoomState } from "@/lib/room-types";
 import { normalizeAvatar } from "@/lib/avatar";
 import { QUIZ_RULES, quizKindOf } from "@/lib/quiz";
+import { addSeen } from "@/lib/quiz-seen";
 import { useAwayDetector } from "@/lib/use-anti-cheat";
 import AvatarPin from "../avatar/AvatarPin";
 import QuizStage, { QuizPicker } from "../quiz/QuizStage";
@@ -32,6 +33,11 @@ export default function RoomQuiz({ code, token, state, clockOffset, onState }: R
   const panoId = state.quiz?.panoId ?? 0;
   const kind = quizKindOf(state.settings.gameType) ?? "region";
   const seconds = QUIZ_RULES[kind].seconds;
+
+  // 이 문제를 본 것으로 기록 (다음에 문제를 받을 때 되도록 빼 달라고 보낸다)
+  useEffect(() => {
+    if (panoId) addSeen(kind, [panoId]);
+  }, [kind, panoId]);
 
   const [myChoice, setMyChoice] = useState<number | null>(null);
   const [sending, setSending] = useState(false);

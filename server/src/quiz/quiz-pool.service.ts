@@ -108,10 +108,11 @@ export class QuizPoolService {
     this.db.prepare('UPDATE quiz_pool SET bad = 1 WHERE pano_id = ?').run(item.panoId);
   }
 
-  // 한 판 문제 만들기 (혼자 하기 / 대결 방 공용). 정답·좌표가 들어 있으니 그대로 내보내지 말 것 (toPublicQuestion)
-  buildQuiz(count = QUIZ_QUESTIONS): QuizServerQuestion[] {
+  // 한 판 문제 만들기 (혼자 하기 / 대결 방 공용). 정답·좌표가 들어 있으니 그대로 내보내지 말 것 (toPublicQuestion).
+  // exclude: 플레이어가 최근에 본 문제. 되도록 빼고, 풀이 모자랄 때만 섞는다
+  buildQuiz(count = QUIZ_QUESTIONS, exclude: ReadonlySet<number> = new Set()): QuizServerQuestion[] {
     if (!this.stats().ready) throw new ServiceUnavailableException(QUIZ_POOL_NOT_READY_MESSAGE);
-    const picks = this.pickRows(count);
+    const picks = this.pickRows(count, exclude);
     if (picks.length < count) throw new ServiceUnavailableException(QUIZ_POOL_NOT_READY_MESSAGE);
 
     const regions = this.db.prepare('SELECT DISTINCT r1, r2 FROM quiz_pool WHERE bad = 0').all() as QuizRegion[];
@@ -145,11 +146,20 @@ export class QuizPoolService {
     return results;
   }
 
-  // 무작위로 count 개. 같은 시·군·구가 겹치지 않게 먼저 고르고, 모자라면 나머지 후보로 채운다
-  private pickRows(count: number): PoolRow[] {
-    const candidates = this.db
-      .prepare('SELECT pano_id, lat, lng, r1, r2 FROM quiz_pool WHERE bad = 0 ORDER BY RANDOM() LIMIT ?')
-      .all(count * PICK_CANDIDATES_FACTOR) as PoolRow[];
+  // 무작위로 count 개. 안 본 문제를 먼저, 같은 시·군·구가 겹치지 않게 먼저 고르고, 모자라면 나머지 후보로 채운다
+  private pickRows(count: number, exclude: ReadonlySet<number> = new Set()): PoolRow[] {
+    const select = this.db.prepare(
+      `SELECT pano_id, lat, lng, r1, r2 FROM quiz_pool
+       WHERE bad = 0 AND pano_id NOT IN (SELECT value FROM json_each(?)) ORDER BY RANDOM() LIMIT ?`,
+    );
+    const limit = count * PICK_CANDIDATES_FACTOR;
+    const fresh = select.all(JSON.stringify([...exclude]), limit) as PoolRow[];
+    // 안 본 문제만으로 모자라면 본 문제도 뒤에 붙인다
+    const freshIds = new Set(fresh.map((r) => r.pano_id));
+    const candidates =
+      fresh.length >= count
+        ? fresh
+        : [...fresh, ...(select.all('[]', limit) as PoolRow[]).filter((r) => !freshIds.has(r.pano_id))];
     const picked: PoolRow[] = [];
     const rest: PoolRow[] = [];
     const usedRegions = new Set<string>();

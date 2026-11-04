@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Crown, X } from "lucide-react";
-import { roomActions } from "@/lib/api";
+import { ApiError, roomActions } from "@/lib/api";
 import { ROOM_MAX_PLAYERS, ROOM_MIN_PLAYERS, RoomState } from "@/lib/room-types";
 import type { ChallengeLocation } from "@/lib/api-types";
 import type { GameSettings } from "@/lib/game-settings";
@@ -10,7 +10,8 @@ import { normalizeAvatar } from "@/lib/avatar";
 import { getRandomRoadviewLocation } from "@/lib/random-location";
 import { ROUNDS_PER_GAME } from "@/lib/score";
 import { QUIZ_QUESTIONS, quizKindOf } from "@/lib/quiz";
-import { ensureQuizPoolReady, ensureStationPoolReady } from "@/lib/quiz-pool";
+import { ensureQuizPoolReady, ensureStationPoolReady, growPoolDuringGame } from "@/lib/quiz-pool";
+import { loadSeen } from "@/lib/quiz-seen";
 import AvatarPin from "../avatar/AvatarPin";
 import GameSettingsIcons from "../GameSettingsIcons";
 import SettingsEditor from "../SettingsEditor";
@@ -70,7 +71,17 @@ export default function RoomLobby({ code, token, state, sdkReady, onState, onLea
         const ensure = quizKind === "station" ? ensureStationPoolReady : ensureQuizPoolReady;
         await ensure((total, minimum) => setPoolProgress({ total, minimum }));
         setPoolProgress(null);
-        onState(await roomActions.start(code, token, {}));
+        // 방장이 최근에 본 문제는 되도록 빼 달라고 보낸다 (exclude 를 모르는 구버전 서버가 400 을 주면 빼고 다시)
+        const exclude = loadSeen(quizKind);
+        let started: RoomState;
+        try {
+          started = await roomActions.start(code, token, exclude.length ? { exclude } : {});
+        } catch (err) {
+          if (!(err instanceof ApiError && err.status === 400 && exclude.length)) throw err;
+          started = await roomActions.start(code, token, {});
+        }
+        onState(started);
+        growPoolDuringGame(quizKind);
         return;
       }
       const locations: ChallengeLocation[] = [];

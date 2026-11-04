@@ -136,6 +136,7 @@ export interface RoomSettingsRequest {
 // POST /rooms/:code/start (방장, lobby). 카카오 로드뷰 위치는 브라우저에서만 뽑을 수 있어 방장이 올린다.
 export interface RoomStartRequest {
   locations?: ChallengeLocation[]; // classic: 정확히 5개. quiz 는 본문 없이 보내면 서버가 문제 풀에서 고른다
+  exclude?: number[]; // 퀴즈: 방장이 최근에 본 문제 (되도록 빼고 고른다)
 }
 // POST /rooms/:code/answer — 퀴즈 보기 선택 (문제당 한 번)
 export interface RoomAnswerRequest {

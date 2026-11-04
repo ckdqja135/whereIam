@@ -113,6 +113,8 @@ interface Room {
   nextChatId: number;
   // 방장이 내보낸 사람의 토큰 (같은 토큰으로 다시 들어오거나 계속 조회하지 못하게)
   kickedTokens: Set<string>;
+  // 퀴즈: 이 방에서 이미 낸 문제 (한 판 더 할 때 겹치지 않게)
+  usedPanoIds: Set<number>;
   // 현재 라운드 방해 아이템 기록 (라운드 시작 시 비움)
   attacks: RoomAttack[];
   nextAttackId: number;
@@ -184,6 +186,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
       chat: [],
       nextChatId: 1,
       kickedTokens: new Set(),
+      usedPanoIds: new Set(),
       attacks: [],
       nextAttackId: 1,
     };
@@ -268,9 +271,14 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     if (kind) {
       // 문제는 서버가 문제 풀에서 고른다 (본문의 locations 는 무시). 풀이 덜 모였으면 503 이고,
       // 방 상태를 바꾸기 전에 던지므로 방은 대기실 그대로 남는다
+      // 이 방에서 이미 낸 문제(한 판 더 포함)와 방장이 최근에 본 문제는 되도록 빼고 고른다
+      const exclude = new Set([...room.usedPanoIds, ...(dto.exclude ?? [])]);
       const quiz =
-        kind === 'station' ? this.stationPool.buildQuiz(QUIZ_QUESTIONS) : this.quizPool.buildQuiz(QUIZ_QUESTIONS);
+        kind === 'station'
+          ? this.stationPool.buildQuiz(QUIZ_QUESTIONS, exclude)
+          : this.quizPool.buildQuiz(QUIZ_QUESTIONS, exclude);
       room.quiz = quiz;
+      for (const q of quiz) room.usedPanoIds.add(q.location.panoId);
       // 라운드 수·결과 공개 좌표는 classic 과 같이 locations 를 쓴다
       room.locations = quiz.map((q) => ({ ...q.location }));
     } else {

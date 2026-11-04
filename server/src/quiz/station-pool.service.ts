@@ -163,19 +163,28 @@ export class StationPoolService {
     this.db.prepare('UPDATE stations SET bad = 1 WHERE pano_id = ?').run(item.panoId);
   }
 
-  // 한 판 문제 만들기 (혼자 하기 / 대결 방 공용). 정답·좌표가 들어 있으니 그대로 내보내지 말 것 (toPublicQuestion)
-  buildQuiz(count = QUIZ_QUESTIONS): QuizServerQuestion[] {
+  // 한 판 문제 만들기 (혼자 하기 / 대결 방 공용). 정답·좌표가 들어 있으니 그대로 내보내지 말 것 (toPublicQuestion).
+  // exclude: 플레이어가 최근에 본 문제. 되도록 빼고, 풀이 모자랄 때만 섞는다
+  buildQuiz(count = QUIZ_QUESTIONS, exclude: ReadonlySet<number> = new Set()): QuizServerQuestion[] {
     if (!this.stats().ready) {
       // 역 목록이 비어 있으면 지금 모으기 시작한다 (키가 있을 때). 이번 요청은 503
       void this.catalog.refreshIfStale();
       throw new ServiceUnavailableException(STATION_POOL_NOT_READY_MESSAGE);
     }
-    const candidates = this.db
-      .prepare(
-        `SELECT id, name, city, lat, lng, pano_id, pano_lat, pano_lng, exit_lat, exit_lng FROM stations
-         WHERE pano_id IS NOT NULL AND bad = 0 AND checked = 1 AND exit_lat IS NOT NULL ORDER BY RANDOM() LIMIT ?`,
-      )
-      .all(count * PICK_CANDIDATES_FACTOR) as PooledRow[];
+    const select = this.db.prepare(
+      `SELECT id, name, city, lat, lng, pano_id, pano_lat, pano_lng, exit_lat, exit_lng FROM stations
+       WHERE pano_id IS NOT NULL AND bad = 0 AND checked = 1 AND exit_lat IS NOT NULL
+         AND pano_id NOT IN (SELECT value FROM json_each(?))
+       ORDER BY RANDOM() LIMIT ?`,
+    );
+    const limit = count * PICK_CANDIDATES_FACTOR;
+    const fresh = select.all(JSON.stringify([...exclude]), limit) as PooledRow[];
+    // 안 본 문제만으로 모자라면 본 문제도 뒤에 붙인다
+    const freshIds = new Set(fresh.map((r) => r.pano_id));
+    const candidates =
+      fresh.length >= count
+        ? fresh
+        : [...fresh, ...(select.all('[]', limit) as PooledRow[]).filter((r) => !freshIds.has(r.pano_id))];
     const all = this.db.prepare('SELECT id, name, city, lat, lng FROM stations').all() as StationRow[];
 
     // 같은 이름의 역은 한 판에 한 번만

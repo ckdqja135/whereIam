@@ -88,7 +88,7 @@ export class QuizController {
   @HttpCode(201)
   @Throttle(SOLO_START_THROTTLE)
   startSolo(@Body() dto: QuizSoloStartDto): QuizSoloStartResponse {
-    return this.solo.start(dto.kind ?? 'region');
+    return this.solo.start(dto.kind ?? 'region', new Set(dto.exclude ?? []));
   }
 
   @Post('solo/:sessionId/answer')

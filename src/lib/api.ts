@@ -161,12 +161,17 @@ export function reportQuizPosition(body: QuizPoolReportRequest) {
   return request<void>("/quiz/pool/report", { method: "POST", body: JSON.stringify(body) });
 }
 
-// 지역 퀴즈는 kind 없이 보낸다 (kind 를 모르는 구버전 서버도 그대로 동작하도록)
-export function startQuizSolo(kind: QuizKind = "region") {
-  return request<QuizSoloStartResponse>("/quiz/solo", {
-    method: "POST",
-    body: JSON.stringify(kind === "region" ? {} : { kind }),
-  });
+// 지역 퀴즈는 kind 없이 보낸다. exclude(최근에 본 문제)를 모르는 구버전 서버가 400 을 주면 빼고 다시 보낸다
+export async function startQuizSolo(kind: QuizKind = "region", exclude: number[] = []) {
+  const base = kind === "region" ? {} : { kind };
+  const send = (body: object) => request<QuizSoloStartResponse>("/quiz/solo", { method: "POST", body: JSON.stringify(body) });
+  if (exclude.length === 0) return send(base);
+  try {
+    return await send({ ...base, exclude });
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 400) return send(base);
+    throw err;
+  }
 }
 
 export function getStationPoolStats() {

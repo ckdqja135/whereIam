@@ -1,6 +1,18 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsObject, IsOptional, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsPositive,
+  Max,
+  ValidateNested,
+} from 'class-validator';
 import { ChallengeLocationDto, GameSettingsDto } from '../../challenges/dto/create-challenge.dto';
+import { QUIZ_EXCLUDE_MAX } from '../../quiz/dto/quiz.dto';
 import { ROUNDS_PER_GAME } from '../../challenges/score';
 
 // POST /rooms/:code/ready
@@ -27,4 +39,13 @@ export class RoomStartDto {
   @ValidateNested({ each: true })
   @Type(() => ChallengeLocationDto)
   locations?: ChallengeLocationDto[];
+
+  // 퀴즈: 방장이 최근에 본 문제 (되도록 빼고 고른다)
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(QUIZ_EXCLUDE_MAX)
+  @IsInt({ each: true })
+  @IsPositive({ each: true })
+  @Max(Number.MAX_SAFE_INTEGER, { each: true })
+  exclude?: number[];
 }

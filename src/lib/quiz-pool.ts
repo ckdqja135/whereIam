@@ -278,6 +278,15 @@ export async function ensureStationPoolReady(onProgress?: (total: number, minimu
   if (!stats.ready) throw new Error("지하철역 문제를 충분히 모으지 못했어요. 잠시 후 다시 시도해주세요.");
 }
 
+// 퀴즈를 한 판 할 때마다 뒤에서 새 위치를 n 개 보태 풀을 키운다 (같은 문제가 덜 반복되게).
+// 문제 로드뷰를 먼저 불러오도록 잠깐 뒤에 시작하고, 실패는 무시
+export function growPoolDuringGame(kind: "region" | "station", n = 10, delayMs = 5000): void {
+  setTimeout(() => {
+    const task = kind === "station" ? contributeToStationPool(n) : contributeToQuizPool(n);
+    task.catch(() => {});
+  }, delayMs);
+}
+
 // 메인 화면에 들어올 때마다 조금씩 보태서 풀을 키운다 (탭당 한 번, 실패는 무시)
 const BACKGROUND_KEY = "whereiam:poolContributed";
 export function contributeInBackground(n = 6): void {
