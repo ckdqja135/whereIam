@@ -1,10 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { haversineKm } from '../challenges/score';
 
 // 카카오 로컬 API 기본 주소. 테스트에서만 KAKAO_API_BASE 로 가짜 서버 주소를 넣는다
 const DEFAULT_KAKAO_API_BASE = 'https://dapi.kakao.com';
 // 요청 하나의 최대 대기 시간
 export const KAKAO_TIMEOUT_MS = 4000;
+// 출입구 번호는 이만큼까지 찾는다 / 4번을 넘어 연달아 이만큼 없으면 그만 찾는다 (닫힌 출구로 번호가 비는 역이 있다)
+const EXIT_MAX_NUMBER = 16;
+const EXIT_MISS_LIMIT = 3;
+// 이보다 가까운 출입구 장소는 같은 출입구로 본다
+const SAME_EXIT_KM = 0.005;
 
 // 퀴즈 정답 지역. r1: 시·도, r2: 시·군·구 (구가 있는 시는 "성남시 분당구" → "성남시". 세종처럼 없으면 '')
 export interface QuizRegion {
@@ -24,6 +30,11 @@ export interface KakaoStationPlace {
   placeName: string; // "강남역 2호선"
   category: string; // "교통,수송 > 지하철,전철 > 수도권2호선"
   address: string; // "서울 강남구 역삼동 858"
+  lat: number;
+  lng: number;
+}
+
+export interface LatLng {
   lat: number;
   lng: number;
 }
@@ -106,12 +117,13 @@ export class KakaoGeocoderService {
     }
   }
 
-  // 역의 출입구 하나 ("선바위역 4호선 1번출구" 처럼 카카오에 "지하철출구" 로 등록된 장소).
-  // 1~4번 출구를 무작위 순서로 찾아 처음 나온 것. 없으면 null, 요청 오류면 undefined (다음에 다시)
-  async searchStationExit(stationName: string, lat: number, lng: number): Promise<{ lat: number; lng: number } | null | undefined> {
+  // 역의 출입구들 ("선바위역 4호선 1번출구" 처럼 카카오에 "지하철출구" 로 등록된 장소).
+  // 1번부터 차례로 찾고, 4번을 넘어 연달아 EXIT_MISS_LIMIT 번 없으면 멈춘다. 없으면 [], 요청 오류면 undefined (다음에 다시)
+  async searchStationExits(stationName: string, lat: number, lng: number): Promise<LatLng[] | undefined> {
     if (!this.enabled) return undefined;
-    const numbers = [1, 2, 3, 4].sort(() => Math.random() - 0.5);
-    for (const n of numbers) {
+    const exits: LatLng[] = [];
+    let misses = 0;
+    for (let n = 1; n <= EXIT_MAX_NUMBER; n++) {
       const params = new URLSearchParams({
         query: `${stationName} ${n}번출구`,
         x: String(lng),
@@ -119,6 +131,7 @@ export class KakaoGeocoderService {
         radius: '1000',
         size: '5',
       });
+      let docs: PlaceDocument[];
       try {
         const res = await fetch(`${this.baseUrl}/v2/local/search/keyword.json?${params}`, {
           headers: { Authorization: `KakaoAK ${this.apiKey}` },
@@ -129,23 +142,32 @@ export class KakaoGeocoderService {
           return undefined;
         }
         const body = (await res.json()) as { documents?: PlaceDocument[] };
-        const exit = (Array.isArray(body?.documents) ? body.documents : []).find(
-          (d) =>
-            typeof d?.place_name === 'string' &&
-            d.place_name.startsWith(stationName) &&
-            typeof d.category_name === 'string' &&
-            d.category_name.includes('지하철출구'),
-        );
-        const exitLat = Number(exit?.y);
-        const exitLng = Number(exit?.x);
-        if (exit && Number.isFinite(exitLat) && Number.isFinite(exitLng)) return { lat: exitLat, lng: exitLng };
+        docs = Array.isArray(body?.documents) ? body.documents : [];
       } catch (err) {
         const name = err instanceof Error ? err.name : '';
         this.logger.warn(`카카오 출입구 검색 요청 오류: ${name === 'TimeoutError' ? '시간 초과' : String(err)}`);
         return undefined;
       }
+      // 환승역은 노선마다 같은 번호 출구가 따로 있을 수 있다 ("서울역 1호선 1번출구", "서울역 4호선 1번출구")
+      const number = new RegExp(`(^|\\s)${n}번출구$`);
+      const found = docs
+        .filter(
+          (d) =>
+            typeof d?.place_name === 'string' &&
+            d.place_name.startsWith(stationName) &&
+            number.test(d.place_name) &&
+            typeof d.category_name === 'string' &&
+            d.category_name.includes('지하철출구'),
+        )
+        .map((d) => ({ lat: Number(d.y), lng: Number(d.x) }))
+        .filter((e) => Number.isFinite(e.lat) && Number.isFinite(e.lng));
+      for (const exit of found) {
+        if (!exits.some((e) => haversineKm(e.lat, e.lng, exit.lat, exit.lng) < SAME_EXIT_KM)) exits.push(exit);
+      }
+      misses = found.length > 0 ? 0 : misses + 1;
+      if (n >= 4 && misses >= EXIT_MISS_LIMIT) break;
     }
-    return null;
+    return exits;
   }
 
   // 사각형 안의 지하철역 한 쪽 (15개씩, page 1~3). 오류·시간 초과면 null

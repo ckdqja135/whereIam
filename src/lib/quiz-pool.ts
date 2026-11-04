@@ -133,7 +133,7 @@ async function readCube(box: HTMLDivElement): Promise<string | null> {
   return null;
 }
 
-// 사진 앞면 방향 재기용 상자. 화면 가운데에 어느 면이 오는지 재야 해서 화면 밖이 아니라
+// 사진 앞면 방향 재기용 상자. 로드뷰가 실제로 그려져야 면의 회전값이 갱신되므로 화면 밖이 아니라
 // 화면 왼쪽 위에 투명하게, 페이지 뒤쪽(z-index -1)에 둔다 (클릭은 위의 페이지가 받는다)
 function measureBox(): HTMLDivElement {
   const box = document.createElement("div");
@@ -142,55 +142,53 @@ function measureBox(): HTMLDivElement {
   return box;
 }
 
-// 카카오 로드뷰 사진은 앞면부터 시계 방향으로 front → right → back → left (면 방향은 로드뷰마다 다르다)
-const FACE_ORDER = ["front", "right", "back", "left"];
+const HEADING_POLL_MS = 50;
+const HEADING_SETTLE_MS = 3000;
+const HEADING_TURN_MS = 2000;
+const sleepMs = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const normalizeDeg = (deg: number) => ((deg % 360) + 360) % 360;
+const angleDiff = (a: number, b: number) => {
+  const d = Math.abs(normalizeDeg(a) - normalizeDeg(b));
+  return d > 180 ? 360 - d : d;
+};
 
-// 다음 화면 갱신까지 (탭이 안 보이면 갱신이 멈추므로 잠깐만 기다린다)
-function nextPaint(): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(resolve, 120);
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        clearTimeout(timer);
-        resolve();
-      })
-    );
-  });
+// 앞면(front)이 화면 정면에서 돌아간 각도. 로드뷰가 면마다 CSS 3D 회전(rotateY)을 걸어 두므로 그 값을 읽는다
+function frontFaceAngle(box: HTMLDivElement): number | null {
+  const face = box.querySelector<HTMLElement>('[id^="_fc_front_"]');
+  if (!face) return null;
+  const transform = getComputedStyle(face).transform;
+  if (!transform || transform === "none") return null;
+  const m = new DOMMatrix(transform);
+  return (Math.atan2(-m.m13, m.m11) * 180) / Math.PI;
 }
 
-// 사진 앞면(front)의 가운데 방향 (0 = 북쪽, 시계 방향). 시점을 돌려 가며 화면 가운데에 오는 면이 바뀌는 각도를 찾는다.
+// 사진 앞면(front)의 가운데 방향 (0 = 북쪽, 시계 방향). 북쪽(0)을 보게 한 뒤 앞면 회전값이 멈추면 읽고,
+// 동쪽(90)으로 돌려 회전값이 정확히 90도 바뀐 것을 확인한 다음 계산한다 (화면 갱신이 늦어 이전 시점 값을 읽는 것을 막는다).
 // 탭이 안 보이는 등으로 잴 수 없으면 null
 async function measureHeading(rv: kakao.maps.Roadview, box: HTMLDivElement): Promise<number | null> {
-  const rect = box.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-  const faceAt = async (pan: number): Promise<string | null> => {
-    if (document.visibilityState !== "visible") return null;
-    rv.setViewpoint(new kakao.maps.Viewpoint(pan, 0, -3));
-    await nextPaint();
-    const el = document.elementsFromPoint(cx, cy).find((e) => box.contains(e) && e.closest('[id^="_fc_"]'));
-    return el?.closest('[id^="_fc_"]')?.id.split("_")[2] ?? null;
-  };
-
-  const prev = await faceAt(0);
-  if (!prev) return null;
-  for (let pan = 30; pan <= 360; pan += 30) {
-    const cur = await faceAt(pan % 360);
-    if (!cur) return null;
-    if (cur === prev) continue;
-    let lo = pan - 30;
-    let hi = pan;
-    for (let k = 0; k < 7; k++) {
-      const mid = (lo + hi) / 2;
-      const f = await faceAt(mid);
-      if (!f) return null;
-      if (f === prev) lo = mid;
-      else hi = mid;
+  const waitFor = async (ok: (angle: number) => boolean, ms: number) => {
+    for (const until = Date.now() + ms; Date.now() < until; ) {
+      if (document.visibilityState !== "visible") return null;
+      const angle = frontFaceAngle(box);
+      if (angle !== null && ok(angle)) return angle;
+      await sleepMs(HEADING_POLL_MS);
     }
-    // 경계에서 새로 들어온 면의 가운데는 경계 + 45도. 앞면은 그 면에서 (순서 × 90)도 반시계
-    const idx = FACE_ORDER.indexOf(cur);
-    if (idx < 0) return null;
-    return (((lo + hi) / 2 + 45 - idx * 90) % 360 + 360) % 360;
+    return null;
+  };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    rv.setViewpoint(new kakao.maps.Viewpoint(0, 0, -3));
+    let prev: number | null = null;
+    let steady = 0;
+    const north = await waitFor((angle) => {
+      steady = prev !== null && angleDiff(angle, prev) < 0.05 ? steady + 1 : 0;
+      prev = angle;
+      return steady >= 4;
+    }, HEADING_SETTLE_MS);
+    if (north === null) continue;
+    rv.setViewpoint(new kakao.maps.Viewpoint(90, 0, -3));
+    const east = await waitFor((angle) => angleDiff(angle, north + 90) < 0.5, HEADING_TURN_MS);
+    if (east === null) continue;
+    return Math.round(normalizeDeg(90 - east) * 10) / 10;
   }
   return null;
 }

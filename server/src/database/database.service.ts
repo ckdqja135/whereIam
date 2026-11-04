@@ -62,7 +62,8 @@ export class DatabaseService implements OnApplicationShutdown {
       CREATE INDEX IF NOT EXISTS idx_quiz_pool_region ON quiz_pool (bad, r1, r2);
 
       -- 지하철역 퀴즈. 역 목록은 서버가 카카오 장소 검색(지하철역 SW8)으로 모으고, 같은 이름의 가까운 역(환승역)은 하나로 합친다.
-      -- 역 바로 앞 로드뷰(pano_*)는 브라우저가 찾아서 보태고, 서버가 사진에서 역 이름 글자를 찾아 보이면 문제에서 뺀다
+      -- 출입구 바로 앞 로드뷰(pano_*)는 브라우저가 찾아서 보태고, 서버가 사진을 검사해서(출입구가 안 보이는 방향, 다리 밑·터널,
+      -- 역 이름 글자) 안 맞으면 다음 출입구에서 다시 찾는다
       CREATE TABLE IF NOT EXISTS stations (
         id              TEXT PRIMARY KEY,           -- 카카오 장소 id (합친 역은 id 가 가장 작은 것)
         name            TEXT NOT NULL,              -- "강남역"
@@ -75,16 +76,30 @@ export class DatabaseService implements OnApplicationShutdown {
         pano_lng        REAL,
         pano_cube       TEXT,                       -- 로드뷰 사진 경로 ("2026/06/9152477/2_103458_9152477_20260605061034")
         pano_heading    REAL,                       -- 사진 앞면의 방향 (0 = 북쪽, 시계 방향)
-        exit_lat        REAL,                       -- 로드뷰를 찾을 출입구 좌표 (카카오 장소 검색 "지하철출구")
+        exits           TEXT,                       -- 역의 출입구 좌표들 JSON [[lat, lng], …] (카카오 장소 검색 "지하철출구", 무작위 순서)
+        exit_try        INTEGER NOT NULL DEFAULT 0, -- 지금 로드뷰를 찾는 출입구 (exits 의 순번). 로드뷰가 안 맞으면 다음 출입구로
+        exit_lat        REAL,                       -- 지금 로드뷰를 찾는 출입구 좌표 (exits[exit_try])
         exit_lng        REAL,
         exit_checked_at TEXT,                       -- 출입구를 찾아본 시각 (못 찾았으면 exit_lat 이 NULL)
-        pano_checked_at TEXT,                       -- 근처에 로드뷰가 없다고 확인한 시각 (다시 찾기 전 대기용)
-        checked         INTEGER NOT NULL DEFAULT 0, -- 1: 사진에서 역 이름을 찾아봤고 안 보임 (이것만 문제로 낸다)
-        bad             INTEGER NOT NULL DEFAULT 0, -- 0이 아니면 문제에서 뺌. 1: 보고된 좌표가 다름, 2: 사진에 역 이름이 보임, 3: 플레이어 신고
+        pano_checked_at TEXT,                       -- 어느 출입구에서도 쓸 로드뷰가 없다고 확인한 시각 (다시 찾기 전 대기용)
+        view_pan        REAL,                       -- 문제 시작 방향 (출입구들을 등진 쪽, 사진 검사 때 정함)
+        view_range      REAL,                       -- 시작 방향에서 좌우로 돌릴 수 있는 각도
+        checked         INTEGER NOT NULL DEFAULT 0, -- 1: 사진 검사를 마침 (bad = 0 인 것만 문제로 낸다)
+        bad             INTEGER NOT NULL DEFAULT 0, -- 0이 아니면 문제에서 뺌. 1: 보고된 좌표가 다름, 2: 사진에 역 이름이 보임, 3: 플레이어 신고,
+                                                    -- 4: 다리 밑·터널 같은 곳, 5: 출입구가 안 보이는 방향이 없음 (2·4·5 는 모든 출입구에서 그랬을 때)
         updated_at      TEXT NOT NULL               -- 역 목록에서 마지막으로 확인한 시각 (ISO)
       );
 
       CREATE INDEX IF NOT EXISTS idx_stations_pano ON stations (bad, pano_id);
+
+      -- 사진 검사에서 떨어진 역 로드뷰 (같은 역에 다시 보태지 않도록)
+      CREATE TABLE IF NOT EXISTS station_rejected_panos (
+        station_id TEXT NOT NULL,
+        pano_id    INTEGER NOT NULL,
+        reason     INTEGER NOT NULL, -- stations.bad 와 같은 번호
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (station_id, pano_id)
+      );
 
       -- 오늘의 문제: 날짜(한국 시간)별 5곳. 그날 처음 요청이 오면 지역 퀴즈 문제 풀(quiz_pool)에서 골라 고정한다
       CREATE TABLE IF NOT EXISTS daily_challenges (
@@ -118,16 +133,24 @@ export class DatabaseService implements OnApplicationShutdown {
     this.addColumn('stations', 'exit_lat', 'REAL');
     this.addColumn('stations', 'exit_lng', 'REAL');
     this.addColumn('stations', 'exit_checked_at', 'TEXT');
-    // 예전에 역 중심 근처에서 모은 로드뷰(뚝방길·다리 밑 등)는 한 번 비우고 출입구 앞에서 다시 모은다
+    this.addColumn('stations', 'exits', 'TEXT');
+    this.addColumn('stations', 'exit_try', 'INTEGER NOT NULL DEFAULT 0');
+    this.addColumn('stations', 'view_pan', 'REAL');
+    this.addColumn('stations', 'view_range', 'REAL');
+    // 로드뷰 고르는 방법이 바뀌면 모은 로드뷰를 한 번 비우고 다시 모은다 (플레이어가 신고한 역은 그대로 뺀다).
+    // 2: 역 중심 근처(뚝방길·다리 밑 등) → 출입구 앞. 3: 출입구 하나 → 모든 출입구를 피하는 방향, 다리 밑·터널 검사
     const version = this.db.prepare("SELECT value FROM app_meta WHERE key = 'stations_pano_version'").get() as
       | { value: string }
       | undefined;
-    if (version?.value !== '2') {
+    if (version?.value !== '3') {
       this.db.transaction(() => {
         this.db.exec(`
           UPDATE stations SET pano_id = NULL, pano_lat = NULL, pano_lng = NULL, pano_cube = NULL, pano_heading = NULL,
-                              pano_checked_at = NULL, checked = 0, bad = 0;
-          INSERT INTO app_meta (key, value) VALUES ('stations_pano_version', '2')
+                              pano_checked_at = NULL, exits = NULL, exit_try = 0, exit_lat = NULL, exit_lng = NULL,
+                              exit_checked_at = NULL, view_pan = NULL, view_range = NULL, checked = 0, bad = 0
+            WHERE bad != 3;
+          DELETE FROM station_rejected_panos;
+          INSERT INTO app_meta (key, value) VALUES ('stations_pano_version', '3')
             ON CONFLICT(key) DO UPDATE SET value = excluded.value;
         `);
       })();
