@@ -74,9 +74,10 @@ export interface StationPoolStats {
 }
 
 // GET /quiz/stations/todo?n=20 — 아직 로드뷰를 못 찾은 역 (무작위, 최대 20개)
+// 좌표는 역 중심이 아니라 출입구 (카카오 장소 검색의 "지하철출구"). 출입구를 못 찾은 역은 문제로 내지 않는다
 export interface StationTodoItem {
   stationId: string;
-  lat: number; // 역 좌표 (카카오 장소 검색)
+  lat: number;
   lng: number;
 }
 export interface StationTodoResponse {
@@ -91,6 +92,7 @@ export interface StationPoolItem {
   lat?: number; // 로드뷰가 실제로 열린 파노라마 좌표
   lng?: number;
   cube?: string; // 로드뷰 사진 경로 (map.kakaocdn.net/map_roadview/{cube}_cube/front_1200.jpg 의 {cube})
+  heading?: number; // 로드뷰 사진 앞면(front)의 가운데 방향 (0 = 북쪽, 시계 방향). 면마다 방향이 로드뷰마다 달라서 브라우저가 잰다
 }
 export interface StationPoolAddRequest {
   items: StationPoolItem[];

@@ -74,6 +74,10 @@ export class DatabaseService implements OnApplicationShutdown {
         pano_lat        REAL,
         pano_lng        REAL,
         pano_cube       TEXT,                       -- 로드뷰 사진 경로 ("2026/06/9152477/2_103458_9152477_20260605061034")
+        pano_heading    REAL,                       -- 사진 앞면의 방향 (0 = 북쪽, 시계 방향)
+        exit_lat        REAL,                       -- 로드뷰를 찾을 출입구 좌표 (카카오 장소 검색 "지하철출구")
+        exit_lng        REAL,
+        exit_checked_at TEXT,                       -- 출입구를 찾아본 시각 (못 찾았으면 exit_lat 이 NULL)
         pano_checked_at TEXT,                       -- 근처에 로드뷰가 없다고 확인한 시각 (다시 찾기 전 대기용)
         checked         INTEGER NOT NULL DEFAULT 0, -- 1: 사진에서 역 이름을 찾아봤고 안 보임 (이것만 문제로 낸다)
         bad             INTEGER NOT NULL DEFAULT 0, -- 0이 아니면 문제에서 뺌. 1: 보고된 좌표가 다름, 2: 사진에 역 이름이 보임, 3: 플레이어 신고
@@ -108,6 +112,31 @@ export class DatabaseService implements OnApplicationShutdown {
         value TEXT NOT NULL
       );
     `);
+
+    // 출입구 기준 지하철역 로드뷰 (이전 DB 에는 칸이 없다)
+    this.addColumn('stations', 'pano_heading', 'REAL');
+    this.addColumn('stations', 'exit_lat', 'REAL');
+    this.addColumn('stations', 'exit_lng', 'REAL');
+    this.addColumn('stations', 'exit_checked_at', 'TEXT');
+    // 예전에 역 중심 근처에서 모은 로드뷰(뚝방길·다리 밑 등)는 한 번 비우고 출입구 앞에서 다시 모은다
+    const version = this.db.prepare("SELECT value FROM app_meta WHERE key = 'stations_pano_version'").get() as
+      | { value: string }
+      | undefined;
+    if (version?.value !== '2') {
+      this.db.transaction(() => {
+        this.db.exec(`
+          UPDATE stations SET pano_id = NULL, pano_lat = NULL, pano_lng = NULL, pano_cube = NULL, pano_heading = NULL,
+                              pano_checked_at = NULL, checked = 0, bad = 0;
+          INSERT INTO app_meta (key, value) VALUES ('stations_pano_version', '2')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+        `);
+      })();
+    }
+  }
+
+  private addColumn(table: string, column: string, type: string) {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!columns.some((c) => c.name === column)) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
 
   onApplicationShutdown() {

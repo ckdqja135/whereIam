@@ -10,8 +10,8 @@ import { addToQuizPool, addToStationPool, getQuizPoolStats, getStationPoolStats,
 
 const KOREA = { minLat: 33.1, maxLat: 38.6, minLng: 125.0, maxLng: 129.6 };
 const SEARCH_RADIUS = 500;
-// 지하철역은 역 바로 앞: 역 좌표에서 150m 안의 가장 가까운 로드뷰, 없으면 300m 까지
-const STATION_RADII = [150, 300];
+// 지하철역은 출입구 바로 앞: 출입구 좌표에서 50m 안의 가장 가까운 로드뷰, 없으면 100m 까지
+const STATION_RADII = [50, 100];
 const RESOLVE_TIMEOUT_MS = 5000;
 const BATCH = 20;
 
@@ -133,8 +133,70 @@ async function readCube(box: HTMLDivElement): Promise<string | null> {
   return null;
 }
 
-// 서버가 알려준 역들의 바로 앞 로드뷰를 찾는다. 근처에 로드뷰가 없으면 panoId: null 로 알려준다
-// (좌표나 사진 경로를 확인하지 못한 역은 빼고 돌려준다. 다음에 다시 시도)
+// 사진 앞면 방향 재기용 상자. 화면 가운데에 어느 면이 오는지 재야 해서 화면 밖이 아니라
+// 화면 왼쪽 위에 투명하게, 페이지 뒤쪽(z-index -1)에 둔다 (클릭은 위의 페이지가 받는다)
+function measureBox(): HTMLDivElement {
+  const box = document.createElement("div");
+  box.style.cssText = "position:fixed;left:0;top:0;width:320px;height:240px;opacity:0;z-index:-1;";
+  document.body.appendChild(box);
+  return box;
+}
+
+// 카카오 로드뷰 사진은 앞면부터 시계 방향으로 front → right → back → left (면 방향은 로드뷰마다 다르다)
+const FACE_ORDER = ["front", "right", "back", "left"];
+
+// 다음 화면 갱신까지 (탭이 안 보이면 갱신이 멈추므로 잠깐만 기다린다)
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, 120);
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        clearTimeout(timer);
+        resolve();
+      })
+    );
+  });
+}
+
+// 사진 앞면(front)의 가운데 방향 (0 = 북쪽, 시계 방향). 시점을 돌려 가며 화면 가운데에 오는 면이 바뀌는 각도를 찾는다.
+// 탭이 안 보이는 등으로 잴 수 없으면 null
+async function measureHeading(rv: kakao.maps.Roadview, box: HTMLDivElement): Promise<number | null> {
+  const rect = box.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const faceAt = async (pan: number): Promise<string | null> => {
+    if (document.visibilityState !== "visible") return null;
+    rv.setViewpoint(new kakao.maps.Viewpoint(pan, 0, -3));
+    await nextPaint();
+    const el = document.elementsFromPoint(cx, cy).find((e) => box.contains(e) && e.closest('[id^="_fc_"]'));
+    return el?.closest('[id^="_fc_"]')?.id.split("_")[2] ?? null;
+  };
+
+  const prev = await faceAt(0);
+  if (!prev) return null;
+  for (let pan = 30; pan <= 360; pan += 30) {
+    const cur = await faceAt(pan % 360);
+    if (!cur) return null;
+    if (cur === prev) continue;
+    let lo = pan - 30;
+    let hi = pan;
+    for (let k = 0; k < 7; k++) {
+      const mid = (lo + hi) / 2;
+      const f = await faceAt(mid);
+      if (!f) return null;
+      if (f === prev) lo = mid;
+      else hi = mid;
+    }
+    // 경계에서 새로 들어온 면의 가운데는 경계 + 45도. 앞면은 그 면에서 (순서 × 90)도 반시계
+    const idx = FACE_ORDER.indexOf(cur);
+    if (idx < 0) return null;
+    return (((lo + hi) / 2 + 45 - idx * 90) % 360 + 360) % 360;
+  }
+  return null;
+}
+
+// 서버가 알려준 역 출입구 바로 앞 로드뷰를 찾는다. 근처에 로드뷰가 없으면 panoId: null 로 알려준다
+// (좌표·사진 경로·사진 방향을 확인하지 못한 역은 빼고 돌려준다. 다음에 다시 시도)
 export async function collectStationPanoramas(todo: StationTodoItem[], onDone?: (done: number) => void): Promise<StationPoolItem[]> {
   if (!window.kakao?.maps?.Roadview) return [];
   const client = new kakao.maps.RoadviewClient();
@@ -153,12 +215,15 @@ export async function collectStationPanoramas(todo: StationTodoItem[], onDone?: 
         items.push({ stationId: station.stationId, panoId: null });
       } else {
         // 역마다 새 로드뷰: 같은 로드뷰를 다시 쓰면 이전 역의 사진이 남아 있어 경로를 잘못 읽을 수 있다
-        const box = offscreenBox();
+        const box = measureBox();
         try {
           const rv = new kakao.maps.Roadview(box);
           const pos = await resolvePosition(rv, panoId, new kakao.maps.LatLng(station.lat, station.lng));
           const cube = pos ? await readCube(box) : null;
-          if (pos && cube) items.push({ stationId: station.stationId, panoId, lat: pos.lat, lng: pos.lng, cube });
+          const heading = cube ? await measureHeading(rv, box) : null;
+          if (pos && cube && heading !== null) {
+            items.push({ stationId: station.stationId, panoId, lat: pos.lat, lng: pos.lng, cube, heading });
+          }
         } finally {
           box.remove();
         }

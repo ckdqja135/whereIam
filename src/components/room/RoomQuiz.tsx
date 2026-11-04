@@ -126,6 +126,7 @@ export default function RoomQuiz({ code, token, state, clockOffset, onState }: R
     <QuizStage
       kind={kind}
       panoId={panoId}
+      view={state.quiz?.view}
       onLoaded={(lat, lng) => {
         // 실제 좌표를 서버에 보고 (저장된 문제 좌표와 다르면 서버가 그 문제를 풀에서 뺀다)
         if (panoId) reportQuizPosition({ panoId, lat, lng }).catch(() => {});

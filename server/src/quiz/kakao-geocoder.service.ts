@@ -52,7 +52,7 @@ interface PlaceDocument {
   y?: string;
 }
 
-// 카카오 REST API 로 좌표 → 행정구역 (coord2regioncode), 사각형 안의 지하철역 검색 (category SW8).
+// 카카오 REST API 로 좌표 → 행정구역 (coord2regioncode), 사각형 안의 지하철역 검색 (category SW8), 역 출입구 검색 (keyword).
 // 브라우저용 JavaScript 키가 아니라 서버 전용 REST API 키(KAKAO_REST_API_KEY)가 필요하다.
 @Injectable()
 export class KakaoGeocoderService {
@@ -104,6 +104,48 @@ export class KakaoGeocoderService {
       this.logger.warn(`카카오 coord2regioncode 요청 오류: ${name === 'TimeoutError' ? '시간 초과' : String(err)}`);
       return null;
     }
+  }
+
+  // 역의 출입구 하나 ("선바위역 4호선 1번출구" 처럼 카카오에 "지하철출구" 로 등록된 장소).
+  // 1~4번 출구를 무작위 순서로 찾아 처음 나온 것. 없으면 null, 요청 오류면 undefined (다음에 다시)
+  async searchStationExit(stationName: string, lat: number, lng: number): Promise<{ lat: number; lng: number } | null | undefined> {
+    if (!this.enabled) return undefined;
+    const numbers = [1, 2, 3, 4].sort(() => Math.random() - 0.5);
+    for (const n of numbers) {
+      const params = new URLSearchParams({
+        query: `${stationName} ${n}번출구`,
+        x: String(lng),
+        y: String(lat),
+        radius: '1000',
+        size: '5',
+      });
+      try {
+        const res = await fetch(`${this.baseUrl}/v2/local/search/keyword.json?${params}`, {
+          headers: { Authorization: `KakaoAK ${this.apiKey}` },
+          signal: AbortSignal.timeout(KAKAO_TIMEOUT_MS),
+        });
+        if (!res.ok) {
+          this.logger.warn(`카카오 출입구 검색 실패: HTTP ${res.status}`);
+          return undefined;
+        }
+        const body = (await res.json()) as { documents?: PlaceDocument[] };
+        const exit = (Array.isArray(body?.documents) ? body.documents : []).find(
+          (d) =>
+            typeof d?.place_name === 'string' &&
+            d.place_name.startsWith(stationName) &&
+            typeof d.category_name === 'string' &&
+            d.category_name.includes('지하철출구'),
+        );
+        const exitLat = Number(exit?.y);
+        const exitLng = Number(exit?.x);
+        if (exit && Number.isFinite(exitLat) && Number.isFinite(exitLng)) return { lat: exitLat, lng: exitLng };
+      } catch (err) {
+        const name = err instanceof Error ? err.name : '';
+        this.logger.warn(`카카오 출입구 검색 요청 오류: ${name === 'TimeoutError' ? '시간 초과' : String(err)}`);
+        return undefined;
+      }
+    }
+    return null;
   }
 
   // 사각형 안의 지하철역 한 쪽 (15개씩, page 1~3). 오류·시간 초과면 null

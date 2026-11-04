@@ -104,6 +104,13 @@ export class StationPoolItemDto {
   @ValidateIf((o: StationPoolItemDto) => o.panoId !== null)
   @Matches(ROADVIEW_CUBE_PATTERN)
   cube?: string;
+
+  // 사진 앞면의 방향 (0~360)
+  @ValidateIf((o: StationPoolItemDto) => o.panoId !== null)
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  @Max(360)
+  heading?: number;
 }
 
 // POST /quiz/stations/pool (1~20개)

@@ -5,6 +5,7 @@ import { Check, Flag, X } from "lucide-react";
 import { flagStation } from "@/lib/api";
 import type { Avatar } from "@/lib/avatar";
 import type { QuizKind, QuizLevel } from "@/lib/quiz";
+import type { QuizView } from "@/lib/room-types";
 import { QUIZ_RULES, QUIZ_TEXT } from "@/lib/quiz";
 import RoadviewPane from "../RoadviewPane";
 import AvatarPin from "../avatar/AvatarPin";
@@ -22,6 +23,8 @@ const PLACEHOLDER = { lat: 36.5, lng: 127.5 };
 interface QuizStageProps {
   kind: QuizKind;
   panoId: number;
+  // 지하철역: 시작 방향과 좌우 회전 범위 (출입구를 등지고 보기)
+  view?: QuizView;
   questionNo: number;
   total: number;
   level: QuizLevel;
@@ -48,6 +51,7 @@ const MARKS = ["A", "B", "C", "D"];
 export default function QuizStage({
   kind,
   panoId,
+  view,
   questionNo,
   total,
   level,
@@ -86,6 +90,7 @@ export default function QuizStage({
           allowMove={false}
           allowPan={canLookAround}
           allowZoom={false}
+          viewLimit={canLookAround ? view : undefined}
           onActualPosition={onLoaded}
         />
       </div>
@@ -148,7 +153,9 @@ export default function QuizStage({
           <p className="mb-2 text-center text-lg font-extrabold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] sm:text-xl">
             {text.prompt}
             {canLookAround && !revealed && (
-              <span className="mt-0.5 block text-xs font-semibold text-white/80">화면을 드래그해서 둘러보세요</span>
+              <span className="mt-0.5 block text-xs font-semibold text-white/80">
+                역 출입구를 등지고 서 있어요 · 앞쪽만 드래그해서 둘러볼 수 있어요
+              </span>
             )}
           </p>
           <div className="grid grid-cols-2 gap-2">

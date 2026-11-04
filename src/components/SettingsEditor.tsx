@@ -93,8 +93,8 @@ function QuizRules({ kind }: { kind: QuizKind }) {
         <KindIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
         {kind === "station" ? (
           <span>
-            지하철역 바로 앞 로드뷰를 보고 <b>{seconds}초 안에</b> 4개 중 무슨 역인지 골라요. 이동은 안 되고{" "}
-            <b>드래그해서 둘러볼 수</b> 있어요. 한 판 <b>{QUIZ_QUESTIONS}문제</b>.
+            지하철역 출입구를 <b>등지고</b> 선 로드뷰예요. 주변을 보고 <b>{seconds}초 안에</b> 4개 중 이 뒤에 있는 역을 골라요.
+            이동은 안 되고 <b>앞쪽만 드래그해서</b> 둘러볼 수 있어요 (뒤는 못 돌아봐요). 한 판 <b>{QUIZ_QUESTIONS}문제</b>.
           </span>
         ) : (
           <span>

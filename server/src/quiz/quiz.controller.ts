@@ -66,8 +66,8 @@ export class QuizController {
 
   @Get('stations/todo')
   @Throttle(POOL_ADD_THROTTLE)
-  stationTodo(@Query('n') n?: string): StationTodoResponse {
-    return { items: this.stations.todo(Number(n)) };
+  async stationTodo(@Query('n') n?: string): Promise<StationTodoResponse> {
+    return { items: await this.stations.todo(Number(n)) };
   }
 
   @Post('stations/pool')

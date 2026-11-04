@@ -215,6 +215,7 @@ export default function QuizSoloSession({ kind, profile, onFinish }: QuizSoloSes
       key={index}
       kind={kind}
       panoId={question.panoId}
+      view={question.view}
       questionNo={index + 1}
       total={session.questions.length}
       level={question.level}

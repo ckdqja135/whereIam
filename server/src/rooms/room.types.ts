@@ -16,6 +16,13 @@ export interface QuizPublicQuestion {
   panoId: number;
   choices: string[]; // 4개
   level: QuizLevel;
+  // 지하철역 퀴즈: 시작 방향(0 = 북쪽, 시계 방향)과 좌우로 돌릴 수 있는 각도. 출입구를 등지고 보게 한다
+  view?: QuizView;
+}
+
+export interface QuizView {
+  pan: number;
+  range: number;
 }
 
 export const ROOM_MAX_PLAYERS = 4;

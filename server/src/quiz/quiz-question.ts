@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import type { ChallengeLocation } from '../challenges/challenge.types';
-import type { QuizLevel, QuizPublicQuestion } from '../rooms/room.types';
+import type { QuizLevel, QuizPublicQuestion, QuizView } from '../rooms/room.types';
 
 // 서버만 갖고 있는 문제 (좌표·정답 포함). 플레이어에게는 toPublicQuestion 으로 바꿔서만 내보낸다
 export interface QuizServerQuestion {
@@ -8,11 +8,14 @@ export interface QuizServerQuestion {
   choices: string[]; // 4개, 서로 다름
   answer: number; // 정답 보기 번호 (0~3)
   level: QuizLevel;
+  view?: QuizView; // 지하철역 퀴즈의 시작 방향·회전 범위
 }
 
 // 좌표와 정답을 뺀 공개용 문제
 export function toPublicQuestion(q: QuizServerQuestion): QuizPublicQuestion {
-  return { panoId: q.location.panoId, choices: [...q.choices], level: q.level };
+  const pub: QuizPublicQuestion = { panoId: q.location.panoId, choices: [...q.choices], level: q.level };
+  if (q.view) pub.view = { ...q.view };
+  return pub;
 }
 
 // choices[0] 이 정답. 섞은 뒤 정답 번호를 기록한다

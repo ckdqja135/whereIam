@@ -10,6 +10,8 @@ interface RoadviewPaneProps {
   allowMove?: boolean;
   allowPan?: boolean;
   allowZoom?: boolean;
+  // 시작 방향과 좌우로 돌릴 수 있는 각도 (0 = 북쪽, 시계 방향). 지하철역 퀴즈: 출입구를 등지고 보기
+  viewLimit?: { pan: number; range: number };
   onActualPosition?: (lat: number, lng: number) => void;
 }
 
@@ -17,19 +19,45 @@ export interface RoadviewHandle {
   resetPosition: () => void;
 }
 
+// 시점 제한이 있을 때 위아래 범위 (카카오 로드뷰는 음수가 위, 양수가 아래)
+const LIMITED_TILT = { min: -20, max: 25 };
+// 드래그 1px 당 회전 각도 = 화면 가로 시야(대략) / 화면 너비
+const DRAG_FOV_DEG = 110;
+// 카카오 로드뷰 확대 단계 (작을수록 넓게)
+const ZOOM_MIN = -3;
+const ZOOM_MAX = 3;
+
+const normalizeDeg = (deg: number) => ((deg % 360) + 360) % 360;
+const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+
+// from 에서 to 로 가장 짧게 도는 각도 (-180 ~ 180)
+function angleDelta(from: number, to: number): number {
+  const d = normalizeDeg(to - from);
+  return d > 180 ? d - 360 : d;
+}
+
+function clampView(pan: number, tilt: number, limit?: { pan: number; range: number }) {
+  if (!limit) return { pan: normalizeDeg(pan), tilt: clamp(tilt, -90, 90) };
+  const offset = clamp(angleDelta(limit.pan, pan), -limit.range, limit.range);
+  return { pan: normalizeDeg(limit.pan + offset), tilt: clamp(tilt, LIMITED_TILT.min, LIMITED_TILT.max) };
+}
+
 const RoadviewPane = forwardRef<RoadviewHandle, RoadviewPaneProps>(
   function RoadviewPane(
-    { panoId, lat, lng, isLoading, allowMove = true, allowPan = true, allowZoom = true, onActualPosition },
+    { panoId, lat, lng, isLoading, allowMove = true, allowPan = true, allowZoom = true, viewLimit, onActualPosition },
     ref
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const overlayRef = useRef<HTMLDivElement>(null);
     const roadviewRef = useRef<kakao.maps.Roadview | null>(null);
     const originRef = useRef<{ panoId: number; lat: number; lng: number } | null>(null);
     // 회전/확대 금지일 때 되돌아갈 시점
     const baseViewRef = useRef<{ pan: number; tilt: number; zoom: number } | null>(null);
     const rulesRef = useRef({ allowMove, allowPan, allowZoom });
+    const viewLimitRef = useRef(viewLimit);
     useEffect(() => {
       rulesRef.current = { allowMove, allowPan, allowZoom };
+      viewLimitRef.current = viewLimit;
     });
 
     useImperativeHandle(ref, () => ({
@@ -79,7 +107,14 @@ const RoadviewPane = forwardRef<RoadviewHandle, RoadviewPaneProps>(
         const actualLng = actualPos.getLng();
         originRef.current = { panoId, lat: actualLat, lng: actualLng };
         const v = rv.getViewpoint();
-        baseViewRef.current = { pan: v.pan, tilt: v.tilt, zoom: v.zoom };
+        const limit = viewLimitRef.current;
+        if (limit) {
+          // 정해진 방향에서 시작
+          baseViewRef.current = { pan: normalizeDeg(limit.pan), tilt: 0, zoom: v.zoom };
+          rv.setViewpoint(new kakao.maps.Viewpoint(baseViewRef.current.pan, 0, v.zoom));
+        } else {
+          baseViewRef.current = { pan: v.pan, tilt: v.tilt, zoom: v.zoom };
+        }
         onActualPositionRef.current?.(actualLat, actualLng);
       };
 
@@ -93,17 +128,17 @@ const RoadviewPane = forwardRef<RoadviewHandle, RoadviewPaneProps>(
         }
       };
 
-      // 회전/확대 금지: 바뀐 시점을 기준 시점으로 되돌린다
+      // 회전/확대 금지, 회전 범위 제한: 범위를 벗어난 시점을 되돌린다
       const handleViewpointChanged = () => {
         const base = baseViewRef.current;
         const { allowPan, allowZoom } = rulesRef.current;
-        if (!base || (allowPan && allowZoom)) return;
+        const limit = viewLimitRef.current;
+        if (!base || (allowPan && allowZoom && !limit)) return;
         const v = rv.getViewpoint();
-        const pan = allowPan ? v.pan : base.pan;
-        const tilt = allowPan ? v.tilt : base.tilt;
+        const view = allowPan ? clampView(v.pan, v.tilt, limit) : { pan: base.pan, tilt: base.tilt };
         const zoom = allowZoom ? v.zoom : base.zoom;
-        if (pan !== v.pan || tilt !== v.tilt || zoom !== v.zoom) {
-          rv.setViewpoint(new kakao.maps.Viewpoint(pan, tilt, zoom));
+        if (Math.abs(angleDelta(view.pan, v.pan)) > 0.01 || Math.abs(view.tilt - v.tilt) > 0.01 || zoom !== v.zoom) {
+          rv.setViewpoint(new kakao.maps.Viewpoint(view.pan, view.tilt, zoom));
         }
       };
 
@@ -133,8 +168,46 @@ const RoadviewPane = forwardRef<RoadviewHandle, RoadviewPaneProps>(
       return () => el.removeEventListener("wheel", block, { capture: true });
     }, [allowZoom]);
 
-    // 이동·회전·확대 모두 금지(NMPZ)면 입력 자체를 막는다
-    const frozen = !allowMove && !allowPan && !allowZoom;
+    // 이동 금지면 로드뷰 위에 입력 막이를 덮는다. 클릭(연타 포함)이 로드뷰에 닿지 않아 다른 위치로 갈 수 없고,
+    // 회전은 드래그를, 확대는 휠을 여기서 직접 처리한다
+    const locked = !allowMove;
+    const dragRef = useRef<{ id: number; x: number; y: number; pan: number; tilt: number } | null>(null);
+
+    const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+      const rv = roadviewRef.current;
+      if (!allowPan || !rv || !baseViewRef.current) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const v = rv.getViewpoint();
+      dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, pan: v.pan, tilt: v.tilt };
+    };
+    const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current;
+      const rv = roadviewRef.current;
+      const width = containerRef.current?.clientWidth ?? 0;
+      if (!drag || !rv || drag.id !== e.pointerId || width === 0) return;
+      // 드래그한 쪽으로 화면이 따라오도록: 오른쪽으로 끌면 왼쪽을 보고, 아래로 끌면 위를 본다
+      const degPerPx = DRAG_FOV_DEG / width;
+      const view = clampView(drag.pan - (e.clientX - drag.x) * degPerPx, drag.tilt - (e.clientY - drag.y) * degPerPx, viewLimitRef.current);
+      rv.setViewpoint(new kakao.maps.Viewpoint(view.pan, view.tilt, rv.getViewpoint().zoom));
+    };
+    const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+      if (dragRef.current?.id === e.pointerId) dragRef.current = null;
+    };
+
+    useEffect(() => {
+      const el = overlayRef.current;
+      if (!el || !locked || !allowZoom) return;
+      const zoom = (e: WheelEvent) => {
+        e.preventDefault();
+        const rv = roadviewRef.current;
+        if (!rv || !baseViewRef.current) return;
+        const v = rv.getViewpoint();
+        const next = clamp(v.zoom + (e.deltaY < 0 ? 1 : -1), ZOOM_MIN, ZOOM_MAX);
+        if (next !== v.zoom) rv.setViewpoint(new kakao.maps.Viewpoint(v.pan, v.tilt, next));
+      };
+      el.addEventListener("wheel", zoom, { passive: false });
+      return () => el.removeEventListener("wheel", zoom);
+    }, [locked, allowZoom]);
 
     return (
       <div className="relative h-full w-full">
@@ -147,7 +220,17 @@ const RoadviewPane = forwardRef<RoadviewHandle, RoadviewPaneProps>(
           </div>
         )}
         <div ref={containerRef} className="h-full w-full" />
-        {frozen && <div className="absolute inset-0 z-[5]" aria-hidden />}
+        {locked && (
+          <div
+            ref={overlayRef}
+            className={`absolute inset-0 z-[5] touch-none select-none ${allowPan ? "cursor-grab active:cursor-grabbing" : ""}`}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            aria-hidden
+          />
+        )}
       </div>
     );
   }
