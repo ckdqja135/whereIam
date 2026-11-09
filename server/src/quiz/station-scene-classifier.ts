@@ -1,19 +1,19 @@
 import { fork, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
 import type { SceneFace } from './roadview-scene';
-import type { SceneRequest, SceneResponse } from './scene-worker';
+import type { SceneRequest, SceneResponse, SceneScore } from './scene-worker';
 
 // 처음 요청은 모델 내려받기(약 89MB)까지 기다린다
 const FIRST_TIMEOUT_MS = 12 * 60_000;
 const TIMEOUT_MS = 60_000;
 
 interface Pending {
-  resolve: (scores: number[]) => void;
+  resolve: (scores: SceneScore[]) => void;
   reject: (err: Error) => void;
   timer: NodeJS.Timeout;
 }
 
-// 지하철역 사진 장면 판별(다리 밑·터널·고가 아래) 프로세스 관리. scene-worker.ts 를 필요할 때 띄우고 stop() 으로 끝낸다
+// 지하철역 사진 장면 판별(다리 밑·터널·고가 아래, 논밭·숲뿐인 곳) 프로세스 관리. scene-worker.ts 를 필요할 때 띄우고 stop() 으로 끝낸다
 export class StationSceneClassifier {
   private child: ChildProcess | null = null;
   private ready = false;
@@ -22,8 +22,8 @@ export class StationSceneClassifier {
 
   constructor(private readonly modelPath: string) {}
 
-  // pans 방향마다 "머리 위가 막힌 곳"일 확률 (0~1)
-  coveredScores(faces: Partial<Record<SceneFace, Buffer>>, heading: number, pans: number[]): Promise<number[]> {
+  // pans 방향마다 "머리 위가 막힌 곳"일 확률과 "건물 없이 논밭·숲뿐인 곳"일 확률 (0~1)
+  scores(faces: Partial<Record<SceneFace, Buffer>>, heading: number, pans: number[]): Promise<SceneScore[]> {
     const child = this.start();
     const id = ++this.seq;
     const request: SceneRequest = { id, modelPath: this.modelPath, heading, pans, faces };

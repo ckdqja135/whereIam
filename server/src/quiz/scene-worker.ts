@@ -6,7 +6,15 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import * as ort from 'onnxruntime-web';
-import { coveredProbability, decodeFace, renderSceneInput, SCENE_INPUT_DIMS, type FacePixels, type SceneFace } from './roadview-scene';
+import {
+  bareProbability,
+  coveredProbability,
+  decodeFace,
+  renderSceneInput,
+  SCENE_INPUT_DIMS,
+  type FacePixels,
+  type SceneFace,
+} from './roadview-scene';
 
 // CLIP ViT-B/32 이미지 쪽 8비트 모델. 텍스트 임베딩(scene-text-embeds.ts)과 같은 리비전이어야 한다
 const MODEL_URL =
@@ -22,7 +30,13 @@ export interface SceneRequest {
   faces: Partial<Record<SceneFace, Uint8Array>>;
 }
 
-export type SceneResponse = { id: number; scores: number[] } | { id: number; error: string };
+// 한 방향의 확률 (0~1). covered: 머리 위가 막힌 곳, bare: 건물 없이 논밭·숲뿐인 곳
+export interface SceneScore {
+  covered: number;
+  bare: number;
+}
+
+export type SceneResponse = { id: number; scores: SceneScore[] } | { id: number; error: string };
 
 let session: Promise<ort.InferenceSession> | null = null;
 
@@ -60,11 +74,12 @@ async function handle(req: SceneRequest): Promise<SceneResponse> {
     const model = await getSession(req.modelPath);
     const faces: Partial<Record<SceneFace, FacePixels>> = {};
     for (const [face, jpeg] of Object.entries(req.faces)) faces[face as SceneFace] = decodeFace(jpeg);
-    const scores: number[] = [];
+    const scores: SceneScore[] = [];
     for (const pan of req.pans) {
       const input = new ort.Tensor('float32', renderSceneInput(faces, req.heading, pan), SCENE_INPUT_DIMS);
       const output = await model.run({ pixel_values: input });
-      scores.push(coveredProbability(output.image_embeds.data as Float32Array));
+      const embed = output.image_embeds.data as Float32Array;
+      scores.push({ covered: coveredProbability(embed), bare: bareProbability(embed) });
     }
     return { id: req.id, scores };
   } catch (err) {

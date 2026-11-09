@@ -85,8 +85,10 @@ export class DatabaseService implements OnApplicationShutdown {
         view_pan        REAL,                       -- 문제 시작 방향 (출입구들을 등진 쪽, 사진 검사 때 정함)
         view_range      REAL,                       -- 시작 방향에서 좌우로 돌릴 수 있는 각도
         checked         INTEGER NOT NULL DEFAULT 0, -- 1: 사진 검사를 마침 (bad = 0 인 것만 문제로 낸다)
+        check_version   INTEGER NOT NULL DEFAULT 0, -- 통과한 사진 검사 방법 (station-photo-check.service.ts 의 CHECK_VERSION 보다 낮으면 다시 검사)
         bad             INTEGER NOT NULL DEFAULT 0, -- 0이 아니면 문제에서 뺌. 1: 보고된 좌표가 다름, 2: 사진에 역 이름이 보임, 3: 플레이어 신고,
-                                                    -- 4: 다리 밑·터널 같은 곳, 5: 출입구가 안 보이는 방향이 없음 (2·4·5 는 모든 출입구에서 그랬을 때)
+                                                    -- 4: 다리 밑·터널 같은 곳, 5: 출입구가 안 보이는 방향이 없음, 6: 건물 없이 논밭·숲만 보임
+                                                    -- (2·4·5·6 은 모든 출입구에서 그랬을 때)
         updated_at      TEXT NOT NULL               -- 역 목록에서 마지막으로 확인한 시각 (ISO)
       );
 
@@ -137,6 +139,7 @@ export class DatabaseService implements OnApplicationShutdown {
     this.addColumn('stations', 'exit_try', 'INTEGER NOT NULL DEFAULT 0');
     this.addColumn('stations', 'view_pan', 'REAL');
     this.addColumn('stations', 'view_range', 'REAL');
+    this.addColumn('stations', 'check_version', 'INTEGER NOT NULL DEFAULT 0');
     // 로드뷰 고르는 방법이 바뀌면 모은 로드뷰를 한 번 비우고 다시 모은다 (플레이어가 신고한 역은 그대로 뺀다).
     // 2: 역 중심 근처(뚝방길·다리 밑 등) → 출입구 앞. 3: 출입구 하나 → 모든 출입구를 피하는 방향, 다리 밑·터널 검사
     const version = this.db.prepare("SELECT value FROM app_meta WHERE key = 'stations_pano_version'").get() as

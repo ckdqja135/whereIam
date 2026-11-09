@@ -1,7 +1,7 @@
 import { decode } from 'jpeg-js';
-import { SCENE_LABELS } from './scene-text-embeds';
+import { BARE_LABELS, SCENE_LABELS } from './scene-text-embeds';
 
-// 지하철역 문제 사진이 다리 밑·터널·고가 아래처럼 머리 위가 막힌 곳인지 가리는 데 쓰는 그림 처리.
+// 지하철역 문제 사진이 다리 밑·터널·고가 아래처럼 머리 위가 막힌 곳인지, 건물 없이 논밭·숲만 보이는 곳인지 가리는 데 쓰는 그림 처리.
 // 로드뷰 정육면체 사진(면마다 1200px)을 줄인 뒤, 플레이어가 보게 될 방향의 화면을 CLIP 입력(224px)으로 그린다.
 // 각도는 카카오 로드뷰와 같이 0 = 북쪽, 시계 방향. heading 은 사진 앞면(front)의 방향
 
@@ -119,12 +119,12 @@ export function renderSceneInput(faces: Partial<Record<SceneFace, FacePixels>>, 
   return out;
 }
 
-// CLIP 이미지 임베딩 → "위가 막힌 곳" 문장들에 걸린 확률 (0~1)
-export function coveredProbability(imageEmbed: ArrayLike<number>): number {
+// CLIP 이미지 임베딩 → 문장들 중 pick 에 걸린 확률 (0~1)
+function labelProbability<T extends { embed: number[] }>(imageEmbed: ArrayLike<number>, labels: T[], pick: (label: T) => boolean): number {
   let norm = 0;
   for (let i = 0; i < imageEmbed.length; i++) norm += imageEmbed[i] * imageEmbed[i];
   norm = Math.sqrt(norm) || 1;
-  const logits = SCENE_LABELS.map(({ embed }) => {
+  const logits = labels.map(({ embed }) => {
     let dot = 0;
     for (let i = 0; i < embed.length; i++) dot += embed[i] * imageEmbed[i];
     return (CLIP_LOGIT_SCALE * dot) / norm;
@@ -132,7 +132,17 @@ export function coveredProbability(imageEmbed: ArrayLike<number>): number {
   const max = Math.max(...logits);
   const exp = logits.map((l) => Math.exp(l - max));
   const sum = exp.reduce((a, b) => a + b, 0);
-  return SCENE_LABELS.reduce((p, label, i) => (label.covered ? p + exp[i] / sum : p), 0);
+  return labels.reduce((p, label, i) => (pick(label) ? p + exp[i] / sum : p), 0);
+}
+
+// "위가 막힌 곳" 문장들에 걸린 확률
+export function coveredProbability(imageEmbed: ArrayLike<number>): number {
+  return labelProbability(imageEmbed, SCENE_LABELS, (label) => label.covered);
+}
+
+// "건물 없이 논밭·숲뿐인 곳" 문장들에 걸린 확률
+export function bareProbability(imageEmbed: ArrayLike<number>): number {
+  return labelProbability(imageEmbed, BARE_LABELS, (label) => label.bare);
 }
 
 export const SCENE_INPUT_DIMS = [1, 3, INPUT_SIZE, INPUT_SIZE];

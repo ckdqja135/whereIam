@@ -23,16 +23,23 @@ const IDLE_STOP_MS = 60_000;
 const RETRY_MS = 10 * 60_000;
 // 시작 방향과 좌우 끝 방향 중 한 곳이라도 이 확률 이상이면 다리 밑·터널 같은 곳으로 본다
 const COVERED_THRESHOLD = 0.8;
+// 시작 방향과 좌우 끝 방향의 평균이 이 확률 이상이면 건물 없이 논밭·숲만 보이는 곳으로 본다 (역 뒤편 농로처럼 단서가 없는 곳)
+const BARE_THRESHOLD = 0.8;
+// 검사 방법이 바뀌면 올린다. 이미 통과한 역도 문제로 계속 내면서 새 방법으로 한 번 더 검사한다 (stations.check_version)
+// 1: 논밭·숲뿐인 곳 검사 추가
+const CHECK_VERSION = 1;
 
 // stations.bad 번호 (database.service.ts)
 const BAD_SIGN = 2;
 const BAD_COVERED = 4;
 const BAD_NO_VIEW = 5;
+const BAD_BARE = 6;
 
 const REJECT_LABEL: Record<number, string> = {
   [BAD_SIGN]: '사진에 역 이름이 보임',
   [BAD_COVERED]: '다리 밑·터널 같은 곳',
   [BAD_NO_VIEW]: '출입구가 안 보이는 방향이 없음',
+  [BAD_BARE]: '건물 없이 논밭·숲만 보임',
 };
 
 interface PendingStation {
@@ -57,10 +64,10 @@ interface TextLine {
 // 지하철역 문제 사진 검사. 출입구 앞 로드뷰마다
 //  1. 역의 출입구들과 역 건물을 모두 등지는 시작 방향과 돌릴 수 있는 각도를 정하고 (station-view.ts, 없으면 탈락)
 //  2. 플레이어에게 보이는 쪽 사진에서 역 이름 글자를 찾고 (OCR, tesseract)
-//  3. 보이는 방향들이 다리 밑·터널·고가 아래처럼 머리 위가 막힌 곳인지 본다 (CLIP, scene-worker.ts)
+//  3. 보이는 방향들이 다리 밑·터널·고가 아래처럼 머리 위가 막힌 곳인지, 건물 없이 논밭·숲만 보이는 곳인지 본다 (CLIP, scene-worker.ts)
 // 떨어지면 그 역의 다음 출입구에서 다시 찾고(station-exits.ts), 통과하면 checked = 1 로 문제에 나간다.
 // 한 번에 한 역씩, 역당 몇 초 걸린다.
-// STATION_SIGN_CHECK=off 면 글자 검사를, STATION_SCENE_CHECK=off 면 다리 밑·터널 검사를 건너뛴다
+// STATION_SIGN_CHECK=off 면 글자 검사를, STATION_SCENE_CHECK=off 면 다리 밑·터널·논밭 검사를 건너뛴다
 @Injectable()
 export class StationPhotoCheckService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(StationPhotoCheckService.name);
@@ -128,16 +135,19 @@ export class StationPhotoCheckService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  // 검사를 기다리는 역 먼저, 그다음 예전 방법으로 통과한 역
   private nextStation(): PendingStation | undefined {
     const now = Date.now();
     const rows = this.database.db
       .prepare(
         `SELECT id, name, lat, lng, exits, exit_lat, exit_lng, pano_cube AS cube, pano_heading AS heading, pano_lat, pano_lng
          FROM stations
-         WHERE pano_id IS NOT NULL AND pano_cube IS NOT NULL AND pano_heading IS NOT NULL AND bad = 0 AND checked = 0
+         WHERE pano_id IS NOT NULL AND pano_cube IS NOT NULL AND pano_heading IS NOT NULL AND bad = 0
+           AND (checked = 0 OR check_version < ?)
+         ORDER BY checked
          LIMIT 50`,
       )
-      .all() as PendingStation[];
+      .all(CHECK_VERSION) as PendingStation[];
     return rows.find((r) => (this.retryAfter.get(r.id) ?? 0) <= now);
   }
 
@@ -193,8 +203,9 @@ export class StationPhotoCheckService implements OnModuleInit, OnModuleDestroy {
 
     if (this.scene) {
       const pans = [view.pan - view.range, view.pan, view.pan + view.range];
-      const scores = await this.scene.coveredScores(images, station.heading, pans);
-      if (Math.max(...scores) >= COVERED_THRESHOLD) return this.reject(station, BAD_COVERED);
+      const scores = await this.scene.scores(images, station.heading, pans);
+      if (Math.max(...scores.map((s) => s.covered)) >= COVERED_THRESHOLD) return this.reject(station, BAD_COVERED);
+      if (scores.reduce((sum, s) => sum + s.bare, 0) / scores.length >= BARE_THRESHOLD) return this.reject(station, BAD_BARE);
     }
     this.accept(station, view);
   }
@@ -202,8 +213,8 @@ export class StationPhotoCheckService implements OnModuleInit, OnModuleDestroy {
   private accept(station: PendingStation, view: StationView) {
     // 검사하는 사이 다른 로드뷰로 바뀌지 않았을 때만
     this.database.db
-      .prepare('UPDATE stations SET checked = 1, view_pan = ?, view_range = ? WHERE id = ? AND pano_cube = ?')
-      .run(view.pan, view.range, station.id, station.cube);
+      .prepare('UPDATE stations SET checked = 1, check_version = ?, view_pan = ?, view_range = ? WHERE id = ? AND pano_cube = ?')
+      .run(CHECK_VERSION, view.pan, view.range, station.id, station.cube);
     this.retryAfter.delete(station.id);
   }
 
