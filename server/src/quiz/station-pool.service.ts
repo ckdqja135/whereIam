@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomInt } from 'node:crypto';
 import { haversineKm } from '../challenges/score';
@@ -56,6 +56,7 @@ interface PooledRow extends StationRow {
 // 통과한 것만 문제로 나간다. 떨어지면 그 역의 다음 출입구에서 다시 찾는다 (station-exits.ts).
 @Injectable()
 export class StationPoolService {
+  private readonly logger = new Logger(StationPoolService.name);
   private readonly minimum: number;
 
   constructor(
@@ -166,9 +167,12 @@ export class StationPoolService {
     return { added, total, pending, ready };
   }
 
-  // 플레이어가 정답 공개 뒤 "역 이름이 보였어요" 를 누르면 그 역은 바로 문제에서 뺀다
+  // 플레이어가 정답 공개 뒤나 결과 화면에서 "역이 보였어요" 를 누르면 그 역은 바로 문제에서 뺀다
   flag(panoId: number): void {
+    const row = this.db.prepare('SELECT name FROM stations WHERE pano_id = ? AND bad = 0').get(panoId) as { name: string } | undefined;
+    if (!row) return;
     this.db.prepare('UPDATE stations SET bad = 3 WHERE pano_id = ? AND bad = 0').run(panoId);
+    this.logger.log(`플레이어 신고로 문제에서 뺐습니다: ${row.name} (로드뷰 ${panoId})`);
   }
 
   // 로드뷰를 띄운 뒤 실제 좌표 보고 (지역 퀴즈와 같은 API). 지하철역 문제의 로드뷰가 아니면 아무것도 안 한다

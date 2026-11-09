@@ -104,7 +104,7 @@ export interface StationPoolAddResponse {
   ready: boolean;
 }
 
-// POST /quiz/stations/flag — 정답 공개 뒤 "역 이름이 보였어요" 신고. 그 역은 바로 문제에서 빠진다 (204)
+// POST /quiz/stations/flag — 정답 공개 뒤나 결과 화면에서 "역이 보였어요" 신고. 그 역은 바로 문제에서 빠진다 (204)
 export interface StationFlagRequest {
   panoId: number;
 }

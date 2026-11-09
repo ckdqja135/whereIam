@@ -6,6 +6,7 @@ import type { QuizKind } from "@/lib/quiz";
 import { QUIZ_TEXT, quizMaxTotal } from "@/lib/quiz";
 import AvatarPin from "../avatar/AvatarPin";
 import type { QuizResult } from "./QuizSoloSession";
+import StationFlagButton from "./StationFlagButton";
 
 interface QuizResultScreenProps {
   kind: QuizKind;
@@ -41,7 +42,10 @@ export default function QuizResultScreen({ kind, profile, results, total, onPlay
           </div>
         </div>
 
-        <ol className="mt-6 divide-y divide-gray-100">
+        {kind === "station" && (
+          <p className="mt-6 text-xs text-gray-500">역 건물이나 역 이름이 바로 보인 문제는 신고해주세요. 그 역은 다시 나오지 않아요</p>
+        )}
+        <ol className={`${kind === "station" ? "mt-2" : "mt-6"} divide-y divide-gray-100`}>
           {results.map((r, i) => (
             <li key={i} className="flex items-center gap-3 py-2.5 text-sm">
               <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${r.correct ? "bg-emerald-500" : "bg-red-500"}`}>
@@ -54,6 +58,7 @@ export default function QuizResultScreen({ kind, profile, results, total, onPlay
                   {!r.correct && ` · ${r.choice === null ? "시간 초과" : `고른 답: ${r.question.choices[r.choice]}`}`}
                 </p>
               </div>
+              {kind === "station" && <StationFlagButton panoId={r.question.panoId} variant="light" />}
               <span className={`shrink-0 font-bold tabular-nums ${r.delta > 0 ? "text-blue-600" : "text-red-500"}`}>
                 {r.delta > 0 ? "+" : ""}
                 {r.delta.toLocaleString()}

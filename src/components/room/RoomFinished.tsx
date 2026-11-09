@@ -10,6 +10,7 @@ import { quizKindOf, quizMaxTotal } from "@/lib/quiz";
 import { TriangleAlert } from "lucide-react";
 import AvatarPin from "../avatar/AvatarPin";
 import RankBadge from "../RankBadge";
+import StationFlagButton from "../quiz/StationFlagButton";
 
 interface RoomFinishedProps {
   code: string;
@@ -75,6 +76,21 @@ export default function RoomFinished({ code, token, state, onState, onLeave }: R
             </li>
           ))}
         </ol>
+
+        {quizKind === "station" && state.rounds.length > 0 && (
+          <div className="mt-8 w-full">
+            <p className="text-xs text-white/60">역 건물이나 역 이름이 바로 보인 문제는 신고해주세요. 그 역은 다시 나오지 않아요</p>
+            <ol className="mt-2 divide-y divide-white/10 rounded-xl bg-white/5 px-3">
+              {state.rounds.map((r) => (
+                <li key={r.round} className="flex items-center gap-3 py-2 text-sm">
+                  <span className="w-5 shrink-0 text-center text-xs text-white/50">{r.round}</span>
+                  <span className="min-w-0 flex-1 truncate font-semibold">{r.quiz ? r.quiz.choices[r.quiz.answer] : "-"}</span>
+                  <StationFlagButton panoId={r.answer.panoId} variant="dark" />
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
 
         <div className="mt-8 flex w-full gap-3">
           <Link

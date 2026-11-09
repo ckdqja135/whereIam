@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { Check, Flag, X } from "lucide-react";
-import { flagStation } from "@/lib/api";
+import type { ReactNode } from "react";
+import { Check, X } from "lucide-react";
 import type { Avatar } from "@/lib/avatar";
 import type { QuizKind, QuizLevel } from "@/lib/quiz";
 import type { QuizView } from "@/lib/room-types";
 import { QUIZ_RULES, QUIZ_TEXT } from "@/lib/quiz";
 import RoadviewPane from "../RoadviewPane";
 import AvatarPin from "../avatar/AvatarPin";
+import StationFlagButton from "./StationFlagButton";
 
 export interface QuizPicker {
   id: string;
@@ -71,12 +71,6 @@ export default function QuizStage({
   const urgent = secondsLeft !== null && secondsLeft <= 5;
   const text = QUIZ_TEXT[kind];
   const canLookAround = kind === "station";
-  // 지하철역: 정답 공개 뒤 "역 이름이 보였어요" 신고 (사진 확인이 놓친 간판). 신고하면 그 문제는 다시 안 나온다
-  const [flagged, setFlagged] = useState(false);
-  const flag = () => {
-    setFlagged(true);
-    flagStation({ panoId }).catch(() => {});
-  };
 
   return (
     <div className="relative h-dvh w-screen overflow-hidden bg-gray-900">
@@ -132,22 +126,10 @@ export default function QuizStage({
       <div className="absolute bottom-0 left-0 right-0 z-10 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
         <div className="mx-auto max-w-2xl">
           {banner && <div className="mb-2 flex justify-center">{banner}</div>}
+          {/* 지하철역: 정답 공개 뒤 신고 (대결 방은 문제가 바뀌어도 이 화면을 그대로 써서 문제마다 새로 그린다) */}
           {canLookAround && revealed && (
             <div className="mb-2 flex justify-center">
-              {flagged ? (
-                <span className="rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-white/90">
-                  신고했어요. 이 문제는 다시 나오지 않아요
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={flag}
-                  className="flex items-center gap-1 rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-white/90 hover:bg-black/75"
-                >
-                  <Flag className="h-3 w-3" aria-hidden />
-                  사진에 역 이름이 보였어요
-                </button>
-              )}
+              <StationFlagButton key={panoId} panoId={panoId} variant="overlay" />
             </div>
           )}
           <p className="mb-2 text-center text-lg font-extrabold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] sm:text-xl">
