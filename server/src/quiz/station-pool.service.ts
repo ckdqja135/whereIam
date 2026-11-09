@@ -9,7 +9,7 @@ import type { QuizPoolItem, StationPoolAddResponse, StationPoolItem, StationPool
 import { QuizServerQuestion, shuffle, withShuffledChoices } from './quiz-question';
 import { StationCatalogService } from './station-catalog.service';
 import { StationPhotoCheckService } from './station-photo-check.service';
-import { moveToNextExit, shuffledExits } from './station-exits';
+import { moveToNextExit, replaceFlaggedPano, shuffledExits } from './station-exits';
 import { awayFromExit, STATION_VIEW_RANGE } from './station-view';
 
 // 지하철역 퀴즈를 내려면 문제로 낼 수 있는 역(로드뷰 + 사진 확인)이 이만큼 있어야 한다.
@@ -25,6 +25,8 @@ const REPORT_MISMATCH_KM = 0.1;
 // 어느 출입구에서도 쓸 로드뷰가 없던 역은 이 기간이 지나야 다시 찾게 한다
 const RECHECK_MS = 14 * 24 * 60 * 60_000;
 export const STATION_TODO_MAX = 20;
+// todo 에 실어 보내는, 브라우저가 피할 로드뷰 수 (역마다 최근 것부터)
+const TODO_EXCLUDE_MAX = 50;
 // 어려움: 가장 가까운 다른 역 이만큼 중에서 3개 / 쉬움: 이 거리(km) 넘게 떨어진 같은 도시의 역에서 3개
 const HARD_NEAREST = 6;
 const EASY_MIN_KM = 3;
@@ -68,6 +70,7 @@ export class StationPoolService {
   ) {
     const raw = Number(config.get<string>('STATION_POOL_MINIMUM'));
     this.minimum = Number.isInteger(raw) && raw > 0 ? Math.max(QUIZ_QUESTIONS, raw) : STATION_POOL_MINIMUM;
+    this.restoreFlagged();
   }
 
   private get db() {
@@ -115,10 +118,17 @@ export class StationPoolService {
     }[];
 
     await this.resolveExits(rows.filter((r) => r.exit_checked_at === null));
+    const rejected = this.db.prepare(
+      'SELECT pano_id FROM station_rejected_panos WHERE station_id = ? ORDER BY created_at DESC LIMIT ?',
+    );
     return rows
       .filter((r) => r.exit_lat !== null && r.exit_lng !== null)
       .slice(0, count)
-      .map((r) => ({ stationId: r.id, lat: r.exit_lat!, lng: r.exit_lng! }));
+      .map((r) => {
+        // 신고·검사로 뺀 로드뷰는 브라우저가 피해서 그 근처의 다른 로드뷰를 찾는다
+        const exclude = (rejected.all(r.id, TODO_EXCLUDE_MAX) as { pano_id: number }[]).map((x) => x.pano_id);
+        return { stationId: r.id, lat: r.exit_lat!, lng: r.exit_lng!, ...(exclude.length ? { exclude } : {}) };
+      });
   }
 
   // 출입구 바로 앞 로드뷰를 보탠다. 이미 로드뷰가 있는 역, 출입구에서 너무 먼 로드뷰, 다른 역이 이미 쓰는 로드뷰는 건너뛴다.
@@ -167,12 +177,15 @@ export class StationPoolService {
     return { added, total, pending, ready };
   }
 
-  // 플레이어가 정답 공개 뒤나 결과 화면에서 "역이 보였어요" 를 누르면 그 역은 바로 문제에서 뺀다
+  // 플레이어가 정답 공개 뒤나 결과 화면에서 "역이 보였어요" 를 누르면 그 사진만 바로 빼고 다른 사진을 찾는다 (역은 문제에 남는다).
+  // 새 사진도 검사를 마친 뒤에 문제로 나간다
   flag(panoId: number): void {
-    const row = this.db.prepare('SELECT name FROM stations WHERE pano_id = ? AND bad = 0').get(panoId) as { name: string } | undefined;
+    const row = this.db.prepare('SELECT id, name FROM stations WHERE pano_id = ? AND bad = 0').get(panoId) as
+      | { id: string; name: string }
+      | undefined;
     if (!row) return;
-    this.db.prepare('UPDATE stations SET bad = 3 WHERE pano_id = ? AND bad = 0').run(panoId);
-    this.logger.log(`플레이어 신고로 문제에서 뺐습니다: ${row.name} (로드뷰 ${panoId})`);
+    replaceFlaggedPano(this.db, row.id, panoId);
+    this.logger.log(`플레이어 신고로 사진을 바꿉니다: ${row.name} (로드뷰 ${panoId})`);
   }
 
   // 로드뷰를 띄운 뒤 실제 좌표 보고 (지역 퀴즈와 같은 API). 지하철역 문제의 로드뷰가 아니면 아무것도 안 한다
@@ -224,6 +237,17 @@ export class StationPoolService {
   }
 
   // ───────────── 내부 ─────────────
+
+  // 예전에는 신고된 역을 문제에서 뺐다 (bad = 3). 지금은 사진만 바꾸므로 그런 역은 신고된 사진을 피해 다시 찾게 한다
+  private restoreFlagged() {
+    const rows = this.db.prepare('SELECT id, name, pano_id FROM stations WHERE bad = 3').all() as {
+      id: string;
+      name: string;
+      pano_id: number | null;
+    }[];
+    for (const row of rows) replaceFlaggedPano(this.db, row.id, row.pano_id);
+    if (rows.length) this.logger.log(`신고로 빠졌던 역 ${rows.length}곳의 사진을 다시 찾습니다: ${rows.map((r) => r.name).join(', ')}`);
+  }
 
   // 출입구 찾기 (동시에 몇 개씩, 시간이 다 되면 남은 것은 다음에). 찾았으면 rows 의 exit_* 도 채운다 (첫 출입구부터)
   private async resolveExits(rows: { id: string; name: string; lat: number; lng: number; exit_lat: number | null; exit_lng: number | null }[]) {

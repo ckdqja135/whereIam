@@ -79,7 +79,7 @@ export default function RoomFinished({ code, token, state, onState, onLeave }: R
 
         {quizKind === "station" && state.rounds.length > 0 && (
           <div className="mt-8 w-full">
-            <p className="text-xs text-white/60">역 건물이나 역 이름이 바로 보인 문제는 신고해주세요. 그 역은 다시 나오지 않아요</p>
+            <p className="text-xs text-white/60">역 건물이나 역 이름이 바로 보인 문제는 신고해주세요. 다른 사진으로 바꿀게요</p>
             <ol className="mt-2 divide-y divide-white/10 rounded-xl bg-white/5 px-3">
               {state.rounds.map((r) => (
                 <li key={r.round} className="flex items-center gap-3 py-2 text-sm">

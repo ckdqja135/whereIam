@@ -12,6 +12,8 @@ const KOREA = { minLat: 33.1, maxLat: 38.6, minLng: 125.0, maxLng: 129.6 };
 const SEARCH_RADIUS = 500;
 // 지하철역은 출입구 바로 앞: 출입구 좌표에서 50m 안의 가장 가까운 로드뷰, 없으면 100m 까지
 const STATION_RADII = [50, 100];
+// 가장 가까운 로드뷰가 피해야 할 것(신고·검사로 뺀 것)이면 출입구에서 반경의 이 비율만큼 떨어진 8방향 점에서 다시 찾는다
+const STATION_PROBE_STEPS = [0.3, 0.6];
 const RESOLVE_TIMEOUT_MS = 5000;
 const BATCH = 20;
 
@@ -193,6 +195,25 @@ async function measureHeading(rv: kakao.maps.Roadview, box: HTMLDivElement): Pro
   return null;
 }
 
+// 출입구에서 radius 안의 로드뷰. 가장 가까운 것이 exclude 에 있으면 출입구 둘레의 점들에서 찾은 다른 로드뷰
+// (점에서 찾는 반경을 줄여서 출입구에서 radius 를 넘지 않게 한다)
+async function findStationPano(client: kakao.maps.RoadviewClient, station: StationTodoItem, radius: number): Promise<number | null> {
+  const nearest = await findNearestPano(client, station.lat, station.lng, radius);
+  const exclude = new Set(station.exclude ?? []);
+  if (!nearest || !exclude.has(nearest)) return nearest;
+  const mPerDegLat = 111_320;
+  const mPerDegLng = mPerDegLat * Math.cos((station.lat * Math.PI) / 180);
+  for (const step of STATION_PROBE_STEPS) {
+    const d = radius * step;
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4;
+      const id = await findNearestPano(client, station.lat + (d * Math.cos(a)) / mPerDegLat, station.lng + (d * Math.sin(a)) / mPerDegLng, radius - d);
+      if (id && !exclude.has(id)) return id;
+    }
+  }
+  return null;
+}
+
 // 서버가 알려준 역 출입구 바로 앞 로드뷰를 찾는다. 근처에 로드뷰가 없으면 panoId: null 로 알려준다
 // (좌표·사진 경로·사진 방향을 확인하지 못한 역은 빼고 돌려준다. 다음에 다시 시도)
 export async function collectStationPanoramas(todo: StationTodoItem[], onDone?: (done: number) => void): Promise<StationPoolItem[]> {
@@ -206,7 +227,7 @@ export async function collectStationPanoramas(todo: StationTodoItem[], onDone?: 
     for (let station = queue.shift(); station; station = queue.shift()) {
       let panoId: number | null = null;
       for (const radius of STATION_RADII) {
-        panoId = await findNearestPano(client, station.lat, station.lng, radius);
+        panoId = await findStationPano(client, station, radius);
         if (panoId) break;
       }
       if (!panoId) {

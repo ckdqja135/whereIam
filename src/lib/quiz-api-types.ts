@@ -79,6 +79,7 @@ export interface StationTodoItem {
   stationId: string;
   lat: number;
   lng: number;
+  exclude?: number[]; // 쓰지 말아야 할 로드뷰 (신고·사진 검사로 뺀 것). 출입구에서 가장 가까운 로드뷰가 이 중 하나면 그 근처의 다른 로드뷰를 찾는다
 }
 export interface StationTodoResponse {
   items: StationTodoItem[];
@@ -104,7 +105,7 @@ export interface StationPoolAddResponse {
   ready: boolean;
 }
 
-// POST /quiz/stations/flag — 정답 공개 뒤나 결과 화면에서 "역이 보였어요" 신고. 그 역은 바로 문제에서 빠진다 (204)
+// POST /quiz/stations/flag — 정답 공개 뒤나 결과 화면에서 "역이 보였어요" 신고. 그 사진은 바로 빠지고 다른 사진을 찾는다 (204)
 export interface StationFlagRequest {
   panoId: number;
 }

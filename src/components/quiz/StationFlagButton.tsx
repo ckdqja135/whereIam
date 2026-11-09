@@ -28,7 +28,7 @@ const STYLES = {
   },
 };
 
-// 지하철역 문제 신고: 로드뷰에서 역 건물이나 역 이름이 바로 보였을 때 (사진 검사가 놓친 것). 신고하면 그 역은 바로 문제에서 빠진다
+// 지하철역 문제 신고: 로드뷰에서 역 건물이나 역 이름이 바로 보였을 때 (사진 검사가 놓친 것). 신고하면 그 사진은 바로 빠지고 서버가 다른 사진을 찾는다
 export default function StationFlagButton({ panoId, variant }: StationFlagButtonProps) {
   const [flagged, setFlagged] = useState(() => flaggedPanos.has(panoId));
   const style = STYLES[variant];
@@ -41,7 +41,7 @@ export default function StationFlagButton({ panoId, variant }: StationFlagButton
   if (flagged) {
     return (
       <span className={`shrink-0 font-semibold ${style.done}`}>
-        {variant === "overlay" ? "신고했어요. 이 문제는 다시 나오지 않아요" : "신고했어요"}
+        {variant === "overlay" ? "신고했어요. 다른 사진으로 바꿀게요" : "신고했어요"}
       </span>
     );
   }
@@ -49,7 +49,7 @@ export default function StationFlagButton({ panoId, variant }: StationFlagButton
     <button
       type="button"
       onClick={flag}
-      title="역 건물이나 역 이름이 바로 보였다면 신고해주세요. 그 역은 다시 나오지 않아요"
+      title="역 건물이나 역 이름이 바로 보였다면 신고해주세요. 다른 사진으로 바꿀게요"
       className={`flex shrink-0 items-center gap-1 font-semibold ${style.button}`}
     >
       <Flag className="h-3 w-3" aria-hidden />

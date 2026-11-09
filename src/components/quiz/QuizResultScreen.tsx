@@ -43,7 +43,7 @@ export default function QuizResultScreen({ kind, profile, results, total, onPlay
         </div>
 
         {kind === "station" && (
-          <p className="mt-6 text-xs text-gray-500">역 건물이나 역 이름이 바로 보인 문제는 신고해주세요. 그 역은 다시 나오지 않아요</p>
+          <p className="mt-6 text-xs text-gray-500">역 건물이나 역 이름이 바로 보인 문제는 신고해주세요. 다른 사진으로 바꿀게요</p>
         )}
         <ol className={`${kind === "station" ? "mt-2" : "mt-6"} divide-y divide-gray-100`}>
           {results.map((r, i) => (
