@@ -53,7 +53,7 @@ interface PooledRow extends StationRow {
 }
 
 // 지하철역 퀴즈 문제 풀 (SQLite stations 테이블의 pano_*, exit_*, view_* 칸).
-// 역 목록과 이름은 서버만 갖고 있고, 브라우저는 역 출입구 바로 앞의 로드뷰만 찾아서 보탠다.
+// 역 목록과 이름은 서버만 갖고 있고, 역 출입구 바로 앞의 로드뷰는 서버(StationPanoFinderService)와 브라우저가 찾아서 보탠다.
 // 보탠 로드뷰는 StationPhotoCheckService 가 검사해서(출입구들을 등지는 방향, 다리 밑·터널, 역 이름 글자)
 // 통과한 것만 문제로 나간다. 떨어지면 그 역의 다음 출입구에서 다시 찾는다 (station-exits.ts).
 @Injectable()

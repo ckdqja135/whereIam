@@ -4,6 +4,7 @@ import { QuizController } from './quiz.controller';
 import { QuizPoolService } from './quiz-pool.service';
 import { QuizSoloService } from './quiz-solo.service';
 import { StationCatalogService } from './station-catalog.service';
+import { StationPanoFinderService } from './station-pano-finder.service';
 import { StationPoolService } from './station-pool.service';
 import { StationPhotoCheckService } from './station-photo-check.service';
 
@@ -17,6 +18,7 @@ import { StationPhotoCheckService } from './station-photo-check.service';
     StationCatalogService,
     StationPhotoCheckService,
     StationPoolService,
+    StationPanoFinderService,
     QuizSoloService,
   ],
   exports: [QuizPoolService, StationPoolService],
